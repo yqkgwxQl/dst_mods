@@ -8,6 +8,17 @@
 - **游戏数据目录**：`C:\Users\<用户名>\Documents\Klei\DoNotStarveTogether`
 - **文档维护**：每当发现新的可验证通道或新的典型故障，回来补一节，并在末尾"变更记录"记一行
 
+**配套文件**
+
+| 文件 | 管什么 |
+|---|---|
+| 本手册 | 怎么测：分层、通道、判据、故障排查、工具用法 |
+| `工作区约定.md` | 文件放哪：目录职责、临时区、清理、仓库边界 |
+| `本机环境.local.md` | 本机专属信息（绝对路径、账号目录、集群），**不入库** |
+
+判断标准：这句话是在说「怎么做」还是「放哪里」——前者进本手册，后者进约定。
+**路径写法**：本手册出现的路径，要么带 `<占位符>` 前缀，要么在所在小节里显式声明了基准目录。**不写裸文件名**——否则会被误解析成相对工作区。
+
 ---
 
 ## 零、事实基础（已核实，不要再凭印象）
@@ -69,23 +80,31 @@
 
 ### 通道 1：静态解析（L0）
 
-不启动游戏，直接读文件。已验证可读的东西：
+不启动游戏，直接读文件。**注意这里有两套完全不同的基准**：
 
-- **mod 源码**：`modinfo.lua`、`modmain.lua`、`scripts/prefabs/*.lua`
-- **anim 包**：解 zip 取 `build.bin` / `anim.bin` / `atlas-0.tex`
-  - 用 ASCII 串提取 build 名、符号名、动画名（长度 ≥ 3 的连续可打印串）
-  - 标志位按 `IndexOf('atlas-0.tex') + 23` 定位，读 uint32
-- **图集 xml**：`<Element name="xxx.tex">` 的元素名列表
-- **游戏源码**：查任意 API 是否存在、参数顺序
+| 读什么 | 基准 | 说明 |
+|---|---|---|
+| mod 源码 | `<mod 根目录>`（仓库内即 `mods\<mod名>\`） | `modinfo.lua`、`modmain.lua`、`scripts\prefabs\*.lua` 都在这之下 |
+| anim 包内文件 | **zip 内部路径**，不是文件系统路径 | `build.bin`、`anim.bin`、`atlas-0.tex` 只能先解 zip 才能取到 |
+| 游戏源码 | 仓库内 `refs\other_reference\scripts\` | 查 API、抄原版实现的地方 |
+
+从这些文件里能读出什么：
+
+- **build 名 / 符号名 / 动画名**：解 zip 后对 `build.bin` 做 ASCII 串提取（长度 ≥ 3 的连续可打印串）
+- **标志位**：按 `IndexOf('atlas-0.tex') + 23` 定位，读 uint32，正常值应为 `8`
+- **图集元素名**：图集 xml 里的 `<Element name="xxx.tex">` 列表
+- **任意 API 是否存在、参数顺序**：查 `refs\other_reference\scripts\` 下的游戏源码
 
 ### 通道 2：日志（L1/L2）
 
-| 文件 | 内容 |
+> **基准**：本节所有路径都相对 `<游戏数据目录>`，**不是**相对工作区或仓库。该目录的实际值见 `本机环境.local.md`。
+
+| 文件（相对 `<游戏数据目录>`） | 内容 |
 |---|---|
-| `master_server_log.txt` / `caves_server_log.txt` | 两个分片"本次"日志 |
-| `Master\server_log.txt` | 分片自己的日志副本 |
+| `master_server_log.txt` / `caves_server_log.txt` | 两个分片"本次"日志（直接在数据目录根下） |
 | `client_log.txt` | 客户端日志（Lua 报错、加载、连接） |
-| `Master\backup\server_log\` | 历史启动日志（对比基线用） |
+| `<账号目录>\Cluster_1\Master\server_log.txt` | 地面分片自己的日志副本 |
+| `<账号目录>\Cluster_1\Master\backup\server_log\` | 历史启动日志（对比基线用） |
 
 **关键观测点**（顺序固定）：
 
@@ -225,22 +244,15 @@ print("[TEST-SUMMARY] total=N pass=X fail=Y")
 
 ### 报告
 
-每次测试写一份，存到：
-```
-<笔记库>\饥荒\测试报告\YYYYMMDD-HHMM-<mod名>.md
-```
+每次测试写一份。**落盘位置见 `工作区约定.md` 的「各类产物的落盘位置」一节**——单次报告进 `_scratch\`，值得长期留的提炼进 `docs\`。
+
 报告结构：结论一句话 → 通过的项 → 失败的项（带证据）→ 未验证的项（说明为什么）→ 建议的下一步。
 
 ### 工具落位
 
-```
-<工作区>\_dst_test\
-├─ check_mod.ps1      # L0，通用，一次写好长期复用
-├─ run_harness.ps1    # L1/L2，起服 + 喂命令 + 收日志
-├─ capture.ps1        # L4，截游戏窗口
-├─ reports\           # 原始日志副本
-└─ baseline\          # 基线快照（见第六节）
-```
+所有工具统一放在仓库的 `tools\` 下（`app\` / `cli\` / `gui\`），自己写的脚本放 `tools\` 根目录。**目录树见 `工作区约定.md` 的「仓库边界」一节**，本节不再重复。
+
+> 早期版本这里写过 `<工作区>\_dst_test\` 的布局，那套目录从未落地，已废弃。
 
 ---
 
@@ -263,6 +275,7 @@ print("[TEST-SUMMARY] total=N pass=X fail=Y")
 | 传送没效果 | RPC 注册名不一致、客户端没发、服务端没在 `ismastersim` 分支里 | L2/L3 |
 | 客户端崩、服务器正常 | `client_log.txt` 的 traceback | L1 |
 | 只有洞穴报错 | 看 `caves_server_log.txt`，两份 `modoverrides` 不一致 | L1 |
+> 本表中的日志文件均相对 `<游戏数据目录>`，见通道 2 的基准说明。
 
 ---
 
@@ -299,7 +312,7 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 ## 七、每次测试的标准流程（SOP）
 
 1. **读代码**：`modinfo.lua` + `modmain.lua` + `scripts/prefabs/*.lua`，判断 mod 类型
-2. **列清单**：按第三节挑对应表，加上这次改动的特有项，先给用户看一眼要测什么
+2. **列清单**：按「三、按 mod 类型的检查清单」挑对应表，加上这次改动的特有项，先给用户看一眼要测什么
 3. **跑 L0**：静态检查，出 PASS/FAIL 表
 4. **L0 有 FAIL 就停**，先修再往上层走（省一次 60 秒重启）
 5. **跑 L1**：起服务器，只读日志，确认加载无报错
@@ -334,7 +347,9 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 
 ---
 
-## 十、禁止事项
+## 十、测试行为禁忌
+
+> 这里只列「测试过程」中的禁忌。**文件放置的禁忌在 `工作区约定.md` 的「两条硬性禁止」一节**，两者不要混。
 
 - ❌ 把测试代码留在正式 mod 里（要留就包在 `if TEST_MODE then ... end` 里）
 - ❌ 直接改用户正在玩的存档
@@ -348,15 +363,11 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 
 ### 11.1 目录分工
 
-```
-tools\
-├─ app\    日常 GUI。需要人工点界面，我不调用
-├─ cli\    可脚本化。我的检查器和自动化会调用这里
-├─ gui\    独立小 GUI，按需人工使用
-└─ docs\   工具笔记（README 中英双份）
-```
+`tools\` 分三类：`app\`（日常 GUI，人工点）、`cli\`（命令行，自动化调用）、`gui\`（独立小工具）。
 
-**归属原则**：能被命令行调用、需要进自动化脚本的 → `cli\`；必须点界面的 → `app\` / `gui\`。
+**归属原则**：能被命令行调用、要进自动化脚本的 → `cli\`；必须点界面的 → `app\` / `gui\`。
+
+> 完整目录树见 `工作区约定.md` 的「仓库边界」一节，本节只讲工具怎么用。
 
 ### 11.2 `app\` —— 日常 GUI（我不调用）
 
@@ -411,18 +422,9 @@ tools\
 
 ### 12.1 结构
 
-```
-refs\
-├─ mod_reference\
-│   └─ mod_test_2\
-│       ├─ assets\   8 个：参考图、中间产物
-│       └─ codes\    3 个：参考代码
-└─ other_reference\
-    ├─ scripts\      4109 个：游戏 Lua 源码（从 scripts.zip 解出）
-    ├─ Wilson_sample\  74 个：官方威尔逊 scml 工程
-    ├─ notes\        1 个：API 速查笔记
-    └─ modtemplate\  4 个：mod 骨架
-```
+`refs\` 分两组：`mod_reference\`（按 mod 分组的人工资料）、`other_reference\`（游戏源码、示例工程、笔记、模板）。完整目录树见 `工作区约定.md` 的「仓库边界」一节。
+
+下面逐项说明每组装什么、什么时候翻。
 
 ### 12.2 各项用途
 
@@ -534,7 +536,7 @@ refs\
 参数抄自客户端日志，补上 token 后可以复现环境：
 
 ```
-bin64\dontstarve_dedicated_server_nullrenderer_x64.exe ^
+<游戏安装目录>\bin64\dontstarve_dedicated_server_nullrenderer_x64.exe ^
   -persistent_storage_root APP:Klei/ -conf_dir DoNotStarveTogether ^
   -cluster Cluster_1 -shard Master ^
   -ownernetid <你的 SteamID> -ownerdir <账号目录> -clouddir <账号目录> ^
@@ -559,3 +561,4 @@ bin64\dontstarve_dedicated_server_nullrenderer_x64.exe ^
 | 2026-11-06 | 补充「0.1 本机源码位置」：绝对路径、版本号、解压复现步骤、zip 真伪判别（修补初版只写相对路径的疏漏） |
 | 2026-11-06 | 新增「十一、工具清单」与「十二、参考资料清单」：`tools/` 四类工具的功能与调用方式、与 L0–L4 的对应关系；`refs/` 各项内容与用途 |
 | 2026-11-06 | 新增「十三、起服实操」：三种起服方式的实测结论、三次失败记录与日志特征、可复现的命令行；`prepare_refs.ps1` 写入 12.3 并实测通过（4109 文件 / 32 秒） |
+| 2026-11-07 | 与《工作区约定》解耦：删除 `_dst_test\` 旧布局、报告路径、两处目录树；「禁止事项」改名「测试行为禁忌」；顶部新增「配套文件」表 |

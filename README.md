@@ -63,6 +63,7 @@ A work-in-progress collection of Don't Starve Together mods.
 ```
 
 - **测试手册**：[docs/MOD测试手册.md](docs/MOD测试手册.md) —— 分层的测试方法与故障排查
+- **工作区约定**：[docs/工作区约定.md](docs/工作区约定.md) —— 目录职责、临时文件规则、清理脚本
 - **重建参考资料**：`refs/` 未入库，clone 后执行
 
   ```powershell
