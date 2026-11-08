@@ -1,16 +1,24 @@
 local assets =
 {
-    Asset("ANIM", "anim/my_weapon.zip"),
-    Asset("ANIM", "anim/swap_my_weapon.zip"),
+    Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),
+    Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),
 }
 
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
     if skin_build ~= nil then
         owner:PushEvent("equipskinneditem", inst:GetSkinName())
-        owner.AnimState:OverrideItemSkinSymbol("swap_object", skin_build, "swap_my_weapon", inst.GUID, "swap_my_weapon")
+        owner.AnimState:OverrideItemSkinSymbol("swap_object", skin_build, "swap_blade_of_the_ruined_king", inst.GUID, "swap_blade_of_the_ruined_king")
     else
-        owner.AnimState:OverrideSymbol("swap_object", "swap_my_weapon", "swap_my_weapon")
+        -- 第 3 个参数是「符号名」，取的是编译产物 build.bin 里记录的符号，
+        -- 不是 PNG 的文件名。你这个导出流程用 SCML 的 folder/entity 名当符号名，
+        -- 你想写的符号名 = SCML 的 folder/entity 名，PNG 文件名随意（它只影响图片本身）
+        -- 符号名 = build.bin 里记录的符号名（= SCML 的 folder/entity 名），不是 PNG 文件名
+        owner.AnimState:OverrideSymbol("swap_object", "swap_blade_of_the_ruined_king", "swap_blade_of_the_ruined_king")
+        --[[     DST Tool的************duration****************
+        地面物品是静态绘制，只画第 0 帧，duration 不参与，所以地面一直正常；
+        手持是 OverrideSymbol 到角色的 swap_object，引擎按时间取样播放这个符号。duration = 1 时这一帧几乎瞬间过期，引擎取不到可画的帧 → 什么都不画；
+            ]]
     end
     owner.AnimState:Show("ARM_carry")
     owner.AnimState:Hide("ARM_normal")
@@ -34,10 +42,10 @@ local function fn()
 
     MakeInventoryPhysics(inst)
 
-    inst.AnimState:SetBank("my_weapon")
-    inst.AnimState:SetBuild("my_weapon")
+    inst.AnimState:SetBank("blade_of_the_ruined_king")
+    inst.AnimState:SetBuild("blade_of_the_ruined_king")
     inst.AnimState:PlayAnimation("idle")        
-    --[[
+    --[[   原来的mod是my_weapon和swap_my_weapon
     1.bank,build,anim..........................................................
     Spriter 里	            编译后成为	    Lua 里写在哪
 
@@ -140,4 +148,4 @@ local function fn()
     return inst
 end
 
-return Prefab("my_weapon", fn, assets)
+return Prefab("blade_of_the_ruined_king", fn, assets)

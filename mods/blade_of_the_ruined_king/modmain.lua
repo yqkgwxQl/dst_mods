@@ -17,19 +17,19 @@
 --此处的_G 不是游戏全局，而是那个沙箱表自己（源码 env.env = env）
 local _G = GLOBAL
 
-PrefabFiles = {"my_weapon"}     -- 对应 scripts/prefabs/my_weapon.lua
+PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 --[[
     why 不是ProfabFiles = {"scripts/prefabs"}呢？
         PrefabFiles 里写的是“prefab 文件名”，不是“路径”；路径是引擎自己拼的，而且 scripts/ 和 prefabs/ 这两段它都帮你加好了。
 
     链路：
-        PrefabFiles = {"my_weapon"}
+        PrefabFiles = {"blade_of_the_ruined_king"}
                 │ 引擎加前缀 "prefabs/"
                 ▼
-        "prefabs/my_weapon"
+        "prefabs/blade_of_the_ruined_king"
                 │ 走 package.path 里的 <mod>\scripts\?.lua
                 ▼
-        <mod>\scripts\prefabs\my_weapon.lua
+        <mod>\scripts\prefabs\blade_of_the_ruined_king.lua
     ]]
 -- Assets表
 --[[
@@ -45,8 +45,8 @@ PrefabFiles = {"my_weapon"}     -- 对应 scripts/prefabs/my_weapon.lua
     4.和 prefab 文件里的 Assets 区别：prefab 里的在 prefab 注册时按需加载；modmain 里的是全局预载，适合 UI 图集这种“随时要用”的资源。
     ]]
 Assets = {
-    Asset("ANIM", "anim/my_weapon.zip"),   
-    Asset("ANIM", "anim/swap_my_weapon.zip"),   
+    Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),   
+    Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),   
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),   
     Asset("IMAGE", "images/inventoryimages/inventoryimg_full_64.tex"),   
     Asset("ATLAS", "images/mod_cover_icon_full_128.xml"),   
@@ -54,11 +54,11 @@ Assets = {
 }
 
 -- 添加配方  AddRecipe2(    产物，原料（树枝两个，燧石1个），所需科技层级，美术资源（atlas,image），分类(武器栏) )
-AddRecipe2("my_weapon", { Ingredient("twigs", 2), Ingredient("flint", 1) },
+AddRecipe2("blade_of_the_ruined_king", { Ingredient("twigs", 2), Ingredient("flint", 1) },
     GLOBAL.TECH.NONE, { atlas = "images/inventoryimages/inventoryimg_full_64.xml",
       image = "inventoryimg_full_64.tex" },{ "WEAPONS" })
       --image 要的是图集里的元素名（看 xml 里的 <Element name="...">），不是文件路径
 
-GLOBAL.STRINGS.NAMES.MY_WEAPON = "破败王者之刃"
-GLOBAL.STRINGS.RECIPE_DESC.MY_WEAPON = "永失吾爱，举目破败"
-GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.MY_WEAPON = "她唇角的一弯，笑意中的温柔... 于她双眸中，我倾见爱如永恒"
+GLOBAL.STRINGS.NAMES.BLADE_OF_THE_RUINED_KING = "破败王者之刃"
+GLOBAL.STRINGS.RECIPE_DESC.BLADE_OF_THE_RUINED_KING = "永失吾爱，举目破败"
+GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BLADE_OF_THE_RUINED_KING = "她唇角的一弯，笑意中的温柔... 于她双眸中，我倾见爱如永恒"

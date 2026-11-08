@@ -1,6 +1,6 @@
 -- 1.身份................................................................................
-name = "Weapon_test"        
-description = "first_mod_attempt_about_my_weapon"            
+name = "blade_of_the_ruined_king"        
+description = "武器: LOL里的破败王者之刃"            
 author = "QianLiq"
 version = "1.0.0"
 api_version_dst = 10     

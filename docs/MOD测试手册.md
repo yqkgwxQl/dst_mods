@@ -33,7 +33,7 @@
 | 截图回调拿到的是内存纹理 | `OnScreenshotReady(texture, texture_string)`，官方用于反馈上传，**未验证可落盘** |
 | 控制台有 120 个 `c_*` 命令 | `scripts/consolecommands.lua` |
 | 模组注入点齐全 | `modutil.lua`：`AddPrefabPostInit` / `AddPrefabPostInitAny` / `AddComponentPostInit` / `AddClassPostConstruct` / `AddPlayerPostInit` / `AddGamePostInit` / `AddSimPostInit` / `AddStategraphPostInit` / `AddBrainPostInit` / `AddReplicableComponent` / `AddModCharacter` / `AddModRPCHandler` / `SendModRPCToServer` / `GetModRPC` |
-| 日志按启动轮转 25 份 | `Master\backup\server_log\server_log_<时间戳>.txt` |
+| 日志按启动轮转 25 份 | `Master\backup\server_log\server_log_<时间戳>.txt` || mod 部署方式 | 目录联接（junction）**已验证可用**：游戏能直接读仓库里的 mod，日志无 `refused path`，背包/手持/落地三态均正常（2026-11-07 实测） |
 | anim 包格式 | zip 内 `build.bin` + `atlas-0.tex` +（物品自身还需 `anim.bin`，swap 包**不能**有） |
 | build.bin 标志位位置 | 不固定！在 `atlas-0.tex` 字符串起点 **+23** 处，uint32 值应为 `8`（写死偏移 65 会误判） |
 
@@ -305,6 +305,7 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 - 只用 `Cluster_1` 测，不碰平时玩的世界
 - 测试前确认 `modoverrides.lua` 只留被测 mod + harness
 - 改动任何集群配置前先整包备份
+- **手改 `cluster.ini` / `modoverrides.lua` 会被客户端覆盖**：客户端启动世界时会用它自己记录的状态重写这两个文件（2026-11-07 实测，`cluster_language` 和三个 mod 的 `enabled` 都被改回去了）。要改配置**必须在游戏 UI 里改**；文件只在客户端没在管的时候才能当权威。
 - 测试世界允许被搞乱，需要干净世界时用 `c_regenerateworld()` 而不是手动删存档
 
 ---
