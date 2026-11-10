@@ -157,6 +157,8 @@ AddSimPostInit(function()
 end)
 ```
 
+> 当前实际落地的版本是把测试脚本直接放进被测 mod（`scripts/autotest.lua`），见第十四章；独立 `harness` mod 是更干净的长期方案，改动量更大。
+
 ### 通道 5：截图（L4）
 
 - **OS 层**：PowerShell 抓游戏窗口区域存 PNG，我直接读图判断。**确定可行**。
@@ -275,6 +277,9 @@ print("[TEST-SUMMARY] total=N pass=X fail=Y")
 | 传送没效果 | RPC 注册名不一致、客户端没发、服务端没在 `ismastersim` 分支里 | L2/L3 |
 | 客户端崩、服务器正常 | `client_log.txt` 的 traceback | L1 |
 | 只有洞穴报错 | 看 `caves_server_log.txt`，两份 `modoverrides` 不一致 | L1 |
+| `Disabling <mod> because it had an error` | 紧邻的 LUA ERROR：strict 模式写了新全局、或沙箱里没有的函数（如 `pcall`） | L1 |
+| 控制台命令没反应 / 语法报错 | 多行粘贴换行被吞、单行太长被截断 | L2 |
+| 延迟断言不打印 | 日志里出现 `Server Autopaused`，窗口失焦导致计时器不推进 | L2 |
 > 本表中的日志文件均相对 `<游戏数据目录>`，见通道 2 的基准说明。
 
 ---
@@ -299,6 +304,8 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 ### 6.3 一个入口
 
 最终形态是 `test.ps1 <mod名>`：L0 → 起服 → L1 → L2 → diff 基线 → 写报告 → 关服。改完代码双击一次，后台跑 60 秒，期间可以继续写。
+
+> 已有最小落地版本：第十四章的 `autotest.lua`——进世界自动跑、输出 `[AUTOTEST]`、结果落在服务端日志。
 
 ### 6.4 测试环境隔离
 
@@ -330,7 +337,8 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 | 做不到 | 原因 | 替代 |
 |---|---|---|
 | 无头验证画面 | `nullrenderer` 不渲染 | 必须有客户端在场 |
-| 自动操作角色（走、攻击、点 UI） | 无法注入鼠标键盘 | 用 `c_*` 命令直接改状态，绕过操作 |
+| 自动操作角色（走、攻击、点 UI） | 无法注入鼠标键盘 | 用 `c_*` 命令直接改状态，或写 `autotest.lua`（第十四章）绕过操作 |
+| 验证右键菜单里出现过某选项 | 依赖客户端 UI 渲染与输入 | 先断言标签齐全（如 `repairable_nightmare`），再让人点一次确认 |
 | 验证"好不好看" | 主观 | 我读截图 + 描述，你拍板 |
 | 双人/多人同步 | 需要第二个账号和客户端 | 只验服务端路径不报错，联机部分标"未验证" |
 | 验证 Steam 创意工坊上传效果 | 涉及真实账号操作 | 只做本地包结构检查 |
@@ -344,7 +352,7 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 1. `-console` 起服时能否用管道喂 stdin 命令、并捕获 stdout
 2. `TheScreenshotter:RequestScreenshot` 的回调纹理能否落盘成 PNG
 3. `c_regenerateworld()` 后 prefab 是否重新注册（影响测试复用）
-4. 只起 Master 不起 Caves 时，`shard_enabled = true` 的集群能否正常运行（影响 L1 时长）
+4. 只起 Master 不起 Caves 时，`shard_enabled = true` 的集群能否正常运行（`shard_enabled = false` 已验证可用）
 
 ---
 
@@ -353,6 +361,8 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 > 这里只列「测试过程」中的禁忌。**文件放置的禁忌在 `工作区约定.md` 的「两条硬性禁止」一节**，两者不要混。
 
 - ❌ 把测试代码留在正式 mod 里（要留就包在 `if TEST_MODE then ... end` 里）
+- ❌ 用全局变量存测试状态——strict 模式会报 `variable ... is not declared`，严重时整个 mod 被禁用
+- ❌ 在 `c_godmode()` 状态下断言回血——`DoDelta` 对无敌目标一律返回 0
 - ❌ 直接改用户正在玩的存档
 - ❌ 未经备份就改 `cluster.ini` / `modoverrides.lua`
 - ❌ 用"应该没问题"替代日志证据
@@ -489,25 +499,25 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 
 ## 十三、起服实操（L1 的前提）
 
-### 13.1 三种起服方式，本机只有一种能走通
+> **2026-11-10 修正**：此前“本机只能走客户端”的结论是错的。手工起服可用，关键是**工作目录必须是 `<游戏目录>\data`**。
+
+### 13.1 三种起服方式
 
 | 方式 | 状态 | 说明 |
 |---|---|---|
-| **客户端点「开始游戏」** | ✅ **可用** | 客户端负责带 token、设工作目录、传 `-monitor_parent_process` / `-sigprefix` 等参数 |
-| 手工命令行起专用服务器 | ❌ 本机失败 | 见 13.2，两次都崩 |
-| 只起 Master、不起 Caves | 未验证 | 得先解决 13.2 |
+| **客户端点「开始游戏」** | ✅ 可用 | 客户端负责带 token、设工作目录、传 `-monitor_parent_process` / `-sigprefix` 等参数 |
+| **手工命令行起专用服务器** | ✅ **可用**（CWD 必须是 `data`） | 见 13.3 |
+| **只起 Master、不起 Caves** | ✅ 已验证 | 集群里 `shard_enabled = false` 即可 |
 
-**结论：要做 L1（读日志验加载），只能走客户端。** 这也是为什么「起服」这件事一直要用户操作，我没法代劳。
-
-### 13.2 失败记录（2026-11-06 实测，三次尝试）
+### 13.2 失败记录与根因（2026-11-06 三次失败 → 2026-11-10 定位）
 
 | # | 参数 | 现象 |
 |---|---|---|
-| 1 | 少 `-ownerdir` | `PersistRootStorage` 落到 `...\DoNotStarveTogether\Cluster_1\`（缺账号目录 `<账号目录>`），读错配置并**误建目录** |
+| 1 | 少 `-ownerdir` | `PersistRootStorage` 落到 `...\DoNotStarveTogether\Cluster_1\`（缺账号目录），读错配置并**误建目录** |
 | 2 | 补 `-ownerdir <账号目录>` | 目录对了，但 `Token file not found`，随后 `DoLuaFile Could not load lua file scripts/main.lua` |
 | 3 | 再加 `-WorkingDirectory <游戏根>` | 仍失败，日志特征见下 |
 
-第 3 次失败的关键日志：
+第 3 次失败的关键日志（CWD = 游戏根目录）：
 
 ```
 [00:00:00]: Mounting file system databundles/klump.zip skipped.
@@ -519,38 +529,190 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 [00:00:01]: Error during game initialization!
 ```
 
-而客户端拉起时的正常日志是：
+**根因**：引擎按**相对路径**找 `databundles/*.zip`。CWD 是游戏根目录时 `databundles/` 并不存在（真实位置是 `<游戏根目录>\data\databundles\`），于是全部 `skipped`，`scripts/main.lua` 自然加载不到。
+
+**修正后**：CWD 改成 `<游戏目录>\data`，同样命令立刻变成：
 
 ```
-[00:00:01]: Mounting file system databundles/klump.zip successful.
+[00:00:00]: Mounting file system databundles/scripts.zip successful.
+[00:00:01]: DoLuaFile scripts/main.lua
 ```
 
-**判断**：所有数据包被 `skipped` → 找不到 `scripts/main.lua` → 初始化直接崩，进程 2 秒退出。**与 mod 无关。**
+所以“与 mod 无关”这个判断是对的，但“只能走客户端”是错的。
 
-**两个可能原因，都未证实，不要当结论用**：
+### 13.3 可复现命令（2026-11-10 实测通过）
 
-- 缺 `cluster_token.txt`（离线模式 `offline_cluster = true` 也没解决）
-- 外置启动缺少客户端传的某些参数（`-monitor_parent_process`、`-sigprefix`、`-secondary_log_prefix`）
+```powershell
+Set-Location "F:\SteamLibrary\steamapps\common\Don't Starve Together\data"
 
-### 13.3 下次要再试，用这条命令
-
-参数抄自客户端日志，补上 token 后可以复现环境：
-
-```
-<游戏安装目录>\bin64\dontstarve_dedicated_server_nullrenderer_x64.exe ^
-  -persistent_storage_root APP:Klei/ -conf_dir DoNotStarveTogether ^
-  -cluster Cluster_1 -shard Master ^
-  -ownernetid <你的 SteamID> -ownerdir <账号目录> -clouddir <账号目录> ^
-  -ugc_directory <创意工坊目录>
+& "..\bin64\dontstarve_dedicated_server_nullrenderer_x64.exe" `
+  -persistent_storage_root "F:\zhongzhuan\dst_mods\_testcluster" `
+  -conf_dir DoNotStarveTogether -cluster Cluster_1 -shard Master `
+  -skip_update_server_mods
 ```
 
-前提：先把 `cluster_token.txt` 放进 `Cluster_1\`（`accounts.klei.com` 生成）。另外用 `Start-Process` 启动时**必须设 `-WorkingDirectory` 为游戏根目录**，否则同样会 `skipped`。
+三个要点：
 
-### 13.4 一条诊断捷径
+1. **工作目录必须是 `<游戏目录>\data`**；用 `Start-Process` 时设 `-WorkingDirectory` 为该目录。
+2. **离线集群不需要 token**：`cluster.ini` 里 `offline_cluster = true`，日志会打 `Token file not found` 但不中断。在线联机才需要 `cluster_token.txt`。
+3. **`modoverrides.lua` 不能带 BOM**：`Set-Content -Encoding utf8` 在部分环境会写 BOM，Lua 5.1 解析失败（`ERROR: Failed to load modoverrides.lua` → `No mods registered`）。用 `[IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))` 写。
+
+### 13.4 最小测试集群
+
+```
+<测试根>\
+└─ DoNotStarveTogether\Cluster_1\
+   ├─ cluster.ini
+   └─ Master\
+      ├─ server.ini
+      └─ modoverrides.lua   ← return { <mod名> = { enabled = true } }
+```
+
+`cluster.ini` 最小内容：
+
+```ini
+[GAMEPLAY]
+game_mode = survival
+max_players = 1
+
+[NETWORK]
+offline_cluster = true
+lan_only_cluster = true
+
+[SHARD]
+shard_enabled = false
+master_port = 10999
+cluster_key = test
+```
+
+`Master\server.ini`：
+
+```ini
+[NETWORK]
+server_port = 10999
+
+[SHARD]
+is_master = true
+```
+
+### 13.5 L1 判据（日志里必须出现）
+
+```
+SUCCESS: Loaded modoverrides.lua
+Loading mod: <mod名> (<中文名>) Version:<版本>
+Registering prefab file: prefabs/<prefab名>
+Registering default mod prefab
+Done forest map gen!
+```
+
+同时不能出现 `attempt to`、`Could not find`、`ERROR: Failed to load`。满足这些才算 L1 通过——它只证明“加载链路”，不证明玩法。
+
+### 13.6 一条诊断捷径
 
 **只要日志里出现 `Mounting file system ... skipped`，问题一定在启动环境，不在 mod。**
 
-别去改 mod 代码、别去动 `modoverrides.lua`——先去查启动参数和工作目录。
+先查工作目录是不是 `<游戏目录>\data`，再去查别的。
+
+---
+
+## 十四、自动化测试（AUTOTEST）
+
+> 核心原则：**能断言的就写成文件自动跑，不能断言的才让人看。**
+> 分工：AI 写测试文件 → 人进一次世界 → AI 读服务端日志 → 出结论；UI、动画、贴图、手感由人确认。
+
+### 14.1 什么能自动化，什么不能
+
+| 能（写进 autotest） | 不能（必须人看） |
+|---|---|
+| 数值：伤害、吸血量、减速倍率、耐久变化 | 右键菜单里有没有出现某个选项 |
+| 状态：`_target_vector` 层数、tag 是否存在 | 动画帧、贴图是否正确 |
+| 时序：`DoTaskInTime` 到点后是否恢复 | 音效、粒子、光效 |
+| 掉落：数量、位置、是否消耗材料 | 手感（打击感、节奏） |
+| 组件链：`repairer` → `repairable` → `finiteuses` | 存档/读档后的视觉一致性 |
+
+### 14.2 落地方式（2026-11-10 实战验证）
+
+1. 新建 `mods/<你的mod>/scripts/autotest.lua`
+2. `modmain.lua` 末尾加一行 `modimport("scripts/autotest.lua")`
+3. 用 `AddPlayerPostInit` 挂入口，延迟 3 秒等服务端世界稳定：
+
+```lua
+local ran = false
+AddPlayerPostInit(function(inst)
+    if ran or G.TheWorld == nil or not G.TheWorld.ismastersim then return end
+    ran = true
+    inst:DoTaskInTime(3, function(p)
+        local ok, err = G.pcall(run, p)
+        if not ok then print("[AUTOTEST] ERROR " .. tostring(err)) end
+    end)
+end)
+```
+
+4. `run(p)` 里用 `SpawnPrefab` 造靶子、`DoAttack` 触发、`print` 断言，格式统一：
+
+```
+[AUTOTEST] PASS damage beefalo   actual=74.26 expect=74.00
+[AUTOTEST] RESULT 8/8
+```
+
+5. 结果全部落在 **`master_server_log.txt`**，用 `[AUTOTEST]` 前缀就能一条命令捞出来
+
+### 14.3 五个坑（都踩过）
+
+| 坑 | 现象 | 正确做法 |
+|---|---|---|
+| **strict 模式** | `variable 'xxx' is not declared`，并触发 `Disabling <mod> because it had an error`，整个 mod 被禁用、进世界即崩 | 不要往全局写新变量；用文件内 `local` 做标记 |
+| **沙箱缺函数** | `attempt to call global 'pcall' (a nil value)` | mod 环境只有 `print/math/table/string/tostring/pairs/ipairs/require`；缺的走 `GLOBAL.`，例如 `GLOBAL.pcall` |
+| **日志位置** | 屏幕上什么都看不到 | `print` 写服务端日志，不在客户端 `CTRL+L` 的日志框里 |
+| **控制台限制** | 多行粘贴换行被吞 → 语法错；单行过长被截断 | 一行一条、用 `;` 分隔、控制在 350 字符内 |
+| **窗口失焦** | `Server Autopaused`，`DoTaskInTime` 不推进，延迟断言永远不出 | 测试期间保持游戏窗口聚焦 |
+
+### 14.4 断言设计规则
+
+1. **用差集，不用绝对值**：数“掉落物”时先快照已有实体，再数新增，否则会被地上历史残留干扰（本次 `break drop` 就是因此误报 3）
+2. **给容差**：伤害类 ±0.5，精确量（吸血）±0.01
+3. **别在无敌状态测回血**：`health:DoDelta` 在 `IsInvincible` 时对正负都返回 0，`c_godmode()` 会让吸血测出 0
+4. **测试会改状态**：耐久、血量、怪物都要在结尾恢复或清理
+5. **一次会话只跑一次**：用局部 `ran` 标记，避免每次重连都刷屏
+
+### 14.5 本次实战记录（2026-11-10，`blade_of_the_ruined_king`）
+
+```
+weapon=blade_of_the_ruined_king  sanity=150.0
+PASS damage beefalo   74.26   （54 基础 + 雾之锋封顶 20）
+PASS no mist hp99     54.26   （maxhealth ≤ 100 不触发）
+PASS lifesteal hit    1.00
+PASS lifesteal kill   4.00    （命中 1 + 击杀 3）
+PASS slow immediate   0.70    （三击叠层）
+PASS slow expired     1.00    （3 秒后摘除）
+PASS sword broken     1
+PASS break drop       2.00
+RESULT 8/8
+```
+
+手动补测（UI 层）：右键出现“修理”、耐久 +50、燃料 -1、满耐久不消耗 → 全部通过。
+
+**过程中修掉的真 bug**：`get_target_element` 创建了记录表却没写回 `_target_vector[target]`，导致每次命中都新建一条、层数永远为 1、三击永远不触发。
+
+### 14.6 收尾
+
+**规则：测试通过后，测试文件直接删除即可。**
+
+- 不需要保留 `scripts/autotest.lua`
+- 不需要提交到版本库
+- 不需要做备份——测试结果已经记在本手册 14.5，代码结论记在 mod 自己的 `setting/mechanic_design.md`
+
+删除步骤（两处）：
+
+1. 删 `mods/<你的mod>/scripts/autotest.lua`
+2. 删 `modmain.lua` 末尾的 `modimport("scripts/autotest.lua")`
+
+然后进一次游戏确认 mod 正常加载即可。
+
+> 例外：如果这个 mod 会长期迭代、需要反复回归，可以把测试文件保留并把开关注册成配置项（默认关闭）。日常开发仍然推荐「测完即删」，避免测试代码混进正式版本。
+
+- 确认游戏 `mods/` 目录里没有残留的临时测试 mod
+- 确认 `modmain.lua` 里没有残留的 `modimport` 行
 
 ---
 
@@ -563,3 +725,5 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 | 2026-11-06 | 新增「十一、工具清单」与「十二、参考资料清单」：`tools/` 四类工具的功能与调用方式、与 L0–L4 的对应关系；`refs/` 各项内容与用途 |
 | 2026-11-06 | 新增「十三、起服实操」：三种起服方式的实测结论、三次失败记录与日志特征、可复现的命令行；`prepare_refs.ps1` 写入 12.3 并实测通过（4109 文件 / 32 秒） |
 | 2026-11-07 | 与《工作区约定》解耦：删除 `_dst_test\` 旧布局、报告路径、两处目录树；「禁止事项」改名「测试行为禁忌」；顶部新增「配套文件」表 |
+| 2026-11-10 | 修正第十三节：手工起服可用（CWD 必须是 `<游戏目录>\data`），删除“只能走客户端”的错误结论；补充离线集群免 token、`modoverrides.lua` 的 BOM 坑、最小测试集群配置与 L1 日志判据；用 `blade_of_the_ruined_king` 实测通过 |
+| 2026-11-10 | 新增「十四、自动化测试」：自动化/手工的分工边界、`autotest.lua` 落地方式、strict 模式与沙箱缺 `pcall` 等五个坑、断言设计规则（差集计数）、本次 8/8 实战记录与真 bug 复盘 |

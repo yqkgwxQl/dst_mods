@@ -29,6 +29,14 @@ _probe_backup/
 # 绝对路径、玩家 ID、本地集群名这类只对一台机器有意义的内容。
 *.local.md
 
+# ---- 大型二进制素材 ----
+# 例如 setting/asset/viego_base.glb（9.6 MB），只在本地当参考，不进版本库。
+*.glb
+
+# ---- 临时测试脚本 ----
+# 按《MOD测试手册》14.6：测试通过后直接删除，不入库。
+mods/**/scripts/autotest.lua
+
 # ---- 系统与编辑器 ----
 Thumbs.db
 desktop.ini
