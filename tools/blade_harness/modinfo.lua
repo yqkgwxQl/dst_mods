@@ -1,9 +1,0 @@
-name = "blade_harness"
-description = "临时测试用：验证破败王者之刃的战斗逻辑"
-author = "test"
-version = "0.1"
-api_version_dst = 10
-dst_compatible = true
-all_clients_require_mod = false
-client_only_mod = false
-server_only_mod = true
