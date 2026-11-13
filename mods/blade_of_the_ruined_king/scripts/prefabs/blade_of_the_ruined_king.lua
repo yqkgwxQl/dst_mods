@@ -28,23 +28,6 @@ local function onunequip(inst, owner)
     end
 end
 
--- local function spawn_fx(target, attacker, fx_name, ty_offset)
---     if target == nil then return end
---     local fx = SpawnPrefab(fx_name)        -- 由此看出特效其实也是prefab
---     if fx ~= nil then
---         local tx, ty, tz = target.Transform:GetWorldPosition()
---         -- 设置特效初始位置
---         fx.Transform:SetPosition(tx, ty + ty_offset, tz)
---         if attacker ~= nil then
---             local ax, ay, az = attacker.Transform:GetWorldPosition()
---             --attacker:GetAngleToPoint(x, y, z) ——————> “攻击者要朝向 (x, y, z) 这个点，rotation 应该是多少度？
---             if ax ~= tx or az ~= tz then
---                 fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
---             end
---         end
---     end
--- end
-
 local function spawn_fx(fx_name, x, y, z, angle, scale)
     local fx = SpawnPrefab(fx_name)
     if fx == nil then return end
@@ -97,15 +80,6 @@ local function apply_slow(inst, target, attacker, target_element)
     local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
     spawn_fx("shadowstrike_slash2_fx", tx, ty + 0.3, tz, angle, nil)
 
-    -- local fx = SpawnPrefab("shadowstrike_slash2_fx")
-    -- if fx ~= nil then
-    --     local tx, ty, tz = target.Transform:GetWorldPosition()
-    --     fx.Transform:SetPosition(tx, ty + 0.3, tz)
-    --     local ax, ay, az = attacker.Transform:GetWorldPosition()
-    --     if ax ~= tx and az ~= tz then
-    --         fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
-    --     end
-    -- end
     loco:SetExternalSpeedMultiplier(inst, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_KEY, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_MULT)
     -- 这里武器被移除时会进行广播  ————>  locomotor 的 onremove 监听会自动摘掉倍率
 
