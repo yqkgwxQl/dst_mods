@@ -1,7 +1,7 @@
 # 破败王者之刃 · 机制设计
 
 > 配套文档：[setting_description.md](setting_description.md)（世界观与视觉语言）
-> 状态：**P0 / P1 已完成（含修复与破碎掉落），P2 待做**（2026-11-10）。
+> 状态：**P0 / P1 已完成，P2 战斗特效已完成（2026-11-13）**；P3 待做。
 > 数值以 `modmain.lua` 的 `TUNING.BLADE_OF_THE_RUINED_KING` 为准；实现见 `scripts/prefabs/blade_of_the_ruined_king.lua`。
 
 ---
@@ -139,7 +139,7 @@
 | **P1 机制** | 雾之锋 + 三击减速 + 命中/击杀回血 + 低理智增伤 | ✅ 完成 |
 | **P1 修复** | 噩梦燃料修复（原版 50 耐久/个） | ✅ 完成（2026-11-10） |
 | **P1 破碎** | 破碎掉 2 个噩梦燃料 | ✅ 完成（2026-11-10） |
-| **P2 特效** | 命中、第三击、击杀、破碎（黑雾爆散）四个特效 | ⬜ 未开始 |
+| **P2 特效** | 命中、第三击、击杀、破碎（黑雾爆散）四个特效 | ✅ 完成（2026-11-13） |
 | **P3 打磨** | 常驻雾、低耐久裂纹、夜晚发光、配置项 | ⬜ 未开始 |
 
 ---
@@ -174,20 +174,25 @@
 - **触发**：每次命中（`onattack` 里）；
 - **表现**：青绿斩痕一闪 + 黑雾从伤口散开，0.2 秒内消失；
 - **实现**：`SpawnPrefab("ruined_blade_hit_fx")` 放在 target 位置，按攻击方向设旋转；FX 用 `abigail_attack_fx.lua` 那套模板（`AddAnimState` → `PlayAnimation` → `animover` 移除，`persists = false`）。
+- **实际（2026-11-13）**：复用原版 `wanda_attack_shadowweapon_normal_fx`；目标血量上限 >100 用默认大小，≤100 用 0.6 缩放；位置 target + 0.2 高度，按攻击方向旋转。
 
 ### 8.2 第三击 · 抓挠之影
 
 - **触发**：印记叠满 3 层；
 - **表现**：三道黑雾爪痕从目标身上划过 + 一圈地面冲击环 + 低频“撕”声；
 - **实现**：同上的 FX prefab，动画 4–6 帧；减速的 3 秒里让目标身上挂一个淡黑色粒子。
+- **实际（2026-11-13）**：`shadowstrike_slash2_fx`，只在目标带 `locomotor` 时生成，位置 target + 0.3 高度；未做目标身上的持续粒子。
 
 ### 8.3 击杀 · 夺魂
 
 - **触发**：目标死亡；
 - **表现**：一缕青绿魂火从尸体飘向剑，剑身闪一下；
 - **实现**：`SpawnPrefab` 一个带 `Follower` 的 FX，`FollowSymbol(owner.GUID, "swap_object")`，1.5 秒后消失；同时 `SetSymbolLightOverride` 短暂拉高亮度。
+- **实际（2026-11-13）**：`wortox_soul_spawn_fx`（自带音效），位置 target + 0.5 高度；未做 Follower 和剑身闪光。
 
 ### 8.4 装备常驻 · 剑身黑雾
+
+**状态**：⬜ 未实现（P3）
 
 - **表现**：剑身缓慢渗出黑雾，低理智时更浓；
 - **实现（省事版）**：直接把雾做进 swap 的 `idle` 动画里，零代码；
@@ -195,10 +200,14 @@
 
 ### 8.5 低耐久 · 裂纹发光
 
+**状态**：⬜ 未实现（P3）
+
 - **表现**：耐久 < 30% 时，剑脊裂纹开始透出红光/青光，越低越亮；
 - **实现**：swap build 里加一个 `crack` 符号，用 `AnimState:ShowSymbol/HideSymbol("crack")` 按耐久切换；或 `SetSymbolLightOverride` 渐变。
 
 ### 8.6 夜晚 / 洞穴 · 自发光
+
+**状态**：⬜ 未实现（P3）
 
 - **表现**：黑暗环境里剑身有微弱青光（不照明，只是好看）；
 - **实现**：`SetSymbolLightOverride("swap_object", 0.3~0.5)`，或挂一个极小的 `Light`（注意性能，别每把剑都开）。
@@ -207,6 +216,7 @@
 
 - **表现**：剑碎成黑雾四散 + 2 个噩梦燃料飞出；
 - **实现**：`finiteuses` 的 `SetOnFinished` 里 `SpawnPrefab` 爆散 FX + `SpawnPrefab("nightmarefuel")` ×2（带一点随机抛射）。
+- **实际（2026-11-13）**：`shadow_puff_large_back` + `shadow_puff_large_front`（自带 `deathpoof` 音效）+ 2 个噩梦燃料（随机偏移）；未做抛射动画。
 
 ### 8.8 素材与性能
 

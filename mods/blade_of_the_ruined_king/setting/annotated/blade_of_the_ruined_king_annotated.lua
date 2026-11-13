@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 blade_of_the_ruined_king.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.2
+版本：v1.0.3
 ================================================================================
 ]==]
 
@@ -45,6 +45,18 @@ local function onunequip(inst, owner)
         owner:PushEvent("unequipskinneditem", inst:GetSkinName())
     end
 end
+local function spawn_fx(fx_name, x, y, z, angle, scale)
+    local fx = SpawnPrefab(fx_name)
+    if fx == nil then return end
+    fx.Transform:SetPosition(x, y, z)
+    if angle ~= nil then
+        fx.Transform:SetRotation(angle)
+    end
+    if scale ~= nil then
+        fx.Transform:SetScale(scale, scale, scale)
+    end
+    return fx
+end
 
 local function get_target_element(inst, target)
     if inst._target_vector == nil then
@@ -74,8 +86,9 @@ local function get_target_element(inst, target)
 end
 
 -- 抓挠之影 : 同一目标3层→减速30%
-local function apply_slow(inst, target, target_element)
     -- locomotor 移动组件  建筑、树木、部分生物没有 locomotor（它们不移动），这时直接放弃，不报错。
+local function apply_slow(inst, target, attacker, target_element)
+    if target == nil then return end
     local loco = target.components.locomotor
     if loco == nil then return end
     --[[
@@ -95,6 +108,9 @@ local function apply_slow(inst, target, target_element)
         loco.SetExternalSpeedMultiplier(self, source, key, multiplier) √√√
         loco.SetExternalSpeedMultiplier(source, key, multiplier)       ×××
         ]]
+    local tx, ty, tz  = target.Transform:GetWorldPosition()
+    local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
+    spawn_fx("shadowstrike_slash2_fx", tx, ty + 0.3, tz, angle, nil)
     loco:SetExternalSpeedMultiplier(inst, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_KEY, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_MULT)
     -- 这里武器被移除时会进行广播  ————>  locomotor 的 onremove 监听会自动摘掉倍率
 
@@ -122,6 +138,7 @@ end
     -- 抓挠之影 : 同一目标3层→减速30% ————> 雾之锋附带的真实伤害 ————> 命中 +1，击杀再 +3
 local function onattack(inst, attacker, target)
 
+    if attacker == nil then return end
     local now = GetTime()
 
         -- 没有目标直接返回
@@ -144,10 +161,15 @@ local function onattack(inst, attacker, target)
 
     -- 雾之锋附带的真实伤害
     if target_health ~= nil and not target_health:IsDead() then
+        local tx, ty, tz  = target.Transform:GetWorldPosition()
+        local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
         if target_health.maxhealth > TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_MIN_HEALTH then
             local damage = math.min(target_health.currenthealth * TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_PERCENT, TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_LIMIT)
             -- false: 不是持续伤害 "blade_of_mist": 造成的伤害标签
             target_health:DoDelta(-damage, false, "blade_of_mist")
+            spawn_fx("wanda_attack_shadowweapon_normal_fx", tx, ty + 0.2, tz, angle, nil)
+        else 
+            spawn_fx("wanda_attack_shadowweapon_normal_fx", tx, ty + 0.2, tz, nil, 0.6)
         end
     end
         -- 如果我死了，直接返回
@@ -160,6 +182,9 @@ local function onattack(inst, attacker, target)
     
     if target_health ~= nil and target_health:IsDead() then
         mine_health:DoDelta(TUNING.BLADE_OF_THE_RUINED_KING.LIFESTEAL_KILL)
+        local tx, ty, tz  = target.Transform:GetWorldPosition()
+        local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
+        spawn_fx("wortox_soul_spawn_fx", tx, ty + 0.5, tz, angle, nil)
     elseif target_health ~= nil then 
 
         -- 抓挠之影 : 同一目标3层→减速30%
@@ -173,7 +198,7 @@ local function onattack(inst, attacker, target)
         target_element.level_count = target_element.level_count + 1
         if target_element.level_count >= 3 then
             target_element.level_count = 0
-            apply_slow(inst, target, target_element)
+            apply_slow(inst, target, attacker, target_element)
         end
     end
 end
@@ -201,6 +226,9 @@ local function onfinished(inst)
         end
     end
     -- 想加音效/黑雾特效？？？？
+    local tx, ty, tz  = inst.Transform:GetWorldPosition()
+    spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
+    spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
     inst:Remove()
 end
 

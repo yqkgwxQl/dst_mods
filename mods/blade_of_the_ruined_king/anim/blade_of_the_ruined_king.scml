@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <spriter_data scml_version="1.0" generator="BrashMonkey Spriter" generator_version="r11">
     <folder id="0" name="blade_of_the_ruined_king">
-        <file id="0" name="blade_of_the_ruined_king/ruined_blade_planted.png" width="76" height="179" pivot_x="0" pivot_y="1"/>
+        <file id="0" name="blade_of_the_ruined_king/ruined_blade_planted.png" width="153" height="327" pivot_x="0" pivot_y="1"/>
     </folder>
     <entity id="0" name="blade_of_the_ruined_king">
         <animation id="0" name="idle" length="1000" interval="100">
@@ -12,7 +12,7 @@
             </mainline>
             <timeline id="0" name="ruined_blade_planted">
                 <key id="0" spin="0">
-                    <object folder="0" file="0" x="-13" y="173"/>
+                    <object folder="0" file="0" x="-16.88" y="173" scale="0.5474"/>
                 </key>
             </timeline>
         </animation>

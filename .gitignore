@@ -20,10 +20,15 @@ tools/gui/
 _trash/
 _scratch/
 _probe_backup/
+_testcluster*/
 *.tool_export
 *.new
 *.bak
 *.tmp
+
+# ---- 素材替换前的本地备份 ----
+# 例如 mods/blade_of_the_ruined_king/_backup_anim_2026-11-12/
+mods/**/_backup_anim_*/
 
 # ---- 本机环境相关 ----
 # 绝对路径、玩家 ID、本地集群名这类只对一台机器有意义的内容。

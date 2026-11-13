@@ -37,7 +37,7 @@ A work-in-progress collection of Don't Starve Together mods.
 
 > 永失吾爱，举目破败
 
-**状态**：P0 数值与 P1 机制已完成并通过验证，下一步做 P2 特效。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
+**状态**：P0 数值、P1 机制、P2 战斗特效已完成并通过验证；贴图已换成双十字护手版本。下一步做 P3 打磨（常驻剑雾、低耐久裂纹、夜晚发光）。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
 
 ---
 

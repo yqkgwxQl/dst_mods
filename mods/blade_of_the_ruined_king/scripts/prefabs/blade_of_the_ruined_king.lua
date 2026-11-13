@@ -28,6 +28,36 @@ local function onunequip(inst, owner)
     end
 end
 
+-- local function spawn_fx(target, attacker, fx_name, ty_offset)
+--     if target == nil then return end
+--     local fx = SpawnPrefab(fx_name)        -- 由此看出特效其实也是prefab
+--     if fx ~= nil then
+--         local tx, ty, tz = target.Transform:GetWorldPosition()
+--         -- 设置特效初始位置
+--         fx.Transform:SetPosition(tx, ty + ty_offset, tz)
+--         if attacker ~= nil then
+--             local ax, ay, az = attacker.Transform:GetWorldPosition()
+--             --attacker:GetAngleToPoint(x, y, z) ——————> “攻击者要朝向 (x, y, z) 这个点，rotation 应该是多少度？
+--             if ax ~= tx or az ~= tz then
+--                 fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
+--             end
+--         end
+--     end
+-- end
+
+local function spawn_fx(fx_name, x, y, z, angle, scale)
+    local fx = SpawnPrefab(fx_name)
+    if fx == nil then return end
+    fx.Transform:SetPosition(x, y, z)
+    if angle ~= nil then
+        fx.Transform:SetRotation(angle)
+    end
+    if scale ~= nil then
+        fx.Transform:SetScale(scale, scale, scale)
+    end
+    return fx
+end
+
 local function get_target_element(inst, target)
     if inst._target_vector == nil then
         inst._target_vector = {}
@@ -56,10 +86,26 @@ local function get_target_element(inst, target)
 end
 
 -- 抓挠之影 : 同一目标3层→减速30%
-local function apply_slow(inst, target, target_element)
+local function apply_slow(inst, target, attacker, target_element)
+    
+    if target == nil then return end
     -- locomotor 移动组件  建筑、树木、部分生物没有 locomotor（它们不移动），这时直接放弃，不报错。
     local loco = target.components.locomotor
     if loco == nil then return end
+
+    local tx, ty, tz  = target.Transform:GetWorldPosition()
+    local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
+    spawn_fx("shadowstrike_slash2_fx", tx, ty + 0.3, tz, angle, nil)
+
+    -- local fx = SpawnPrefab("shadowstrike_slash2_fx")
+    -- if fx ~= nil then
+    --     local tx, ty, tz = target.Transform:GetWorldPosition()
+    --     fx.Transform:SetPosition(tx, ty + 0.3, tz)
+    --     local ax, ay, az = attacker.Transform:GetWorldPosition()
+    --     if ax ~= tx and az ~= tz then
+    --         fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
+    --     end
+    -- end
     loco:SetExternalSpeedMultiplier(inst, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_KEY, TUNING.BLADE_OF_THE_RUINED_KING.RUIN_SLOW_MULT)
     -- 这里武器被移除时会进行广播  ————>  locomotor 的 onremove 监听会自动摘掉倍率
 
@@ -82,6 +128,7 @@ end
 -- inst: 武器，即破败王者之刃 attacker: 攻击者，即人物自己 target: 你所攻击的目标
     -- 抓挠之影 : 同一目标3层→减速30% ————> 雾之锋附带的真实伤害 ————> 命中 +1，击杀再 +3
 local function onattack(inst, attacker, target)
+    if attacker == nil then return end
 
     local now = GetTime()
 
@@ -105,10 +152,25 @@ local function onattack(inst, attacker, target)
 
     -- 雾之锋附带的真实伤害
     if target_health ~= nil and not target_health:IsDead() then
+        --[[
+            1.DST 是 3D 世界：
+                y 是高度（上下）
+                x、z 是地面（前后左右）
+            2.  target.Transform:GetPosition()        -- 本地坐标
+                target.Transform:GetWorldPosition()   -- 世界坐标
+            一般物体两者相同；但如果目标站在船、平台、被父节点挂载的东西上，GetPosition 是相对父节点的，直接拿来 SetPosition 会偏。
+            ]]
+        
+        local tx, ty, tz  = target.Transform:GetWorldPosition()
+        local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
         if target_health.maxhealth > TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_MIN_HEALTH then
             local damage = math.min(target_health.currenthealth * TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_PERCENT, TUNING.BLADE_OF_THE_RUINED_KING.BLADE_OF_MIST_LIMIT)
             -- false: 不是持续伤害 "blade_of_mist": 造成的伤害标签
             target_health:DoDelta(-damage, false, "blade_of_mist")
+                    -- 为命中添加特效
+            spawn_fx("wanda_attack_shadowweapon_normal_fx", tx, ty + 0.2, tz, angle, nil)
+        else 
+            spawn_fx("wanda_attack_shadowweapon_normal_fx", tx, ty + 0.2, tz, nil, 0.6)
         end
     end
         -- 如果我死了，直接返回
@@ -121,6 +183,21 @@ local function onattack(inst, attacker, target)
     
     if target_health ~= nil and target_health:IsDead() then
         mine_health:DoDelta(TUNING.BLADE_OF_THE_RUINED_KING.LIFESTEAL_KILL)
+        -- 进行添加特效
+        local tx, ty, tz  = target.Transform:GetWorldPosition()
+        local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
+        spawn_fx("wortox_soul_spawn_fx", tx, ty + 0.5, tz, angle, nil)
+        -- local fx = SpawnPrefab("wortox_soul_spawn_fx")        -- 由此看出特效其实也是prefab
+        -- if fx ~= nil then
+        --     local tx, ty, tz = target.Transform:GetWorldPosition()
+        --     -- 设置特效初始位置
+        --     fx.Transform:SetPosition(tx, ty, tz)
+        --     local ax, ay, az = attacker:GetWorldPosition()
+        --     --attacker:GetAngleToPoint(x, y, z) ——————> “攻击者要朝向 (x, y, z) 这个点，rotation 应该是多少度？
+        --     if ax ~= tx or az ~= tz then
+        --         fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
+        --     end
+        -- end
     elseif target_health ~= nil then 
 
         -- 抓挠之影 : 同一目标3层→减速30%
@@ -134,7 +211,7 @@ local function onattack(inst, attacker, target)
         target_element.level_count = target_element.level_count + 1
         if target_element.level_count >= 3 then
             target_element.level_count = 0
-            apply_slow(inst, target, target_element)
+            apply_slow(inst, target, attacker, target_element)
         end
     end
 end
@@ -161,9 +238,16 @@ local function onfinished(inst)
             fuel.Transform:SetPosition(pos.x + ox, pos.y, pos.z + oz)
         end
     end
-    -- 想加音效/黑雾特效？？？？
+    -- 想加音效/黑雾特效
+    local tx, ty, tz  = inst.Transform:GetWorldPosition()
+    spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
+    spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
+    
     inst:Remove()
 end
+
+
+
 
 local function fn()
     local inst = CreateEntity()
