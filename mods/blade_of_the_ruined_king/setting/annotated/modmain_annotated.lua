@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 modmain.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.4
+版本：v1.0.5
 ================================================================================
 ]==]
 
@@ -162,7 +162,55 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
 -- ========================================================================================================
 -- ========================================================================================================
 -- ========================================================================================================
+--[[
+    1.------------------
+    AddPlayerPostInit：在每个玩家实体上执行初始化
+    player：回调传进来的玩家实体
+    net_float：跨客户端同步一个浮点数的网络变量
 
+    2.------------------
+    net_float(guid, name, event)
+        参数	含义
+        guid	挂在哪个实体上，这里用 player.GUID
+        name	变量名，服务器/客户端必须完全一致
+        event	值变化时，在实体上推送的事件名
+
+    3.流程------------------
+    玩家生成
+        → AddPlayerPostInit 执行
+        → 创建 _blade_glow（两端）
+        → 客户端挂上 bladeglowdirty 监听
+
+    装备剑，服务器每 0.1 秒算一次 k
+        → owner._blade_glow:set(k)
+        → 网络同步
+        → 客户端 player 触发 bladeglowdirty
+        → ApplyGlow 读取 k，调用 SetSymbolAddColour / LightOverride
+    ]]
+    
+local function ApplyGlow(player, k)
+    if player.AnimState == nil then return end
+    if k <= 0 then
+        player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
+        player.AnimState:SetSymbolLightOverride("swap_object", 0)
+        player.AnimState:ClearSymbolBloom("swap_object")
+        return
+    end
+    player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
+    player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
+    player.AnimState:SetSymbolBloom("swap_object")
+end
+AddPlayerPostInit(function(player)
+    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
+    player:ListenForEvent("bladeglowdirty", function()
+        ApplyGlow(player, player._blade_glow:value())
+    end)
+    player:DoTaskInTime(0.5, function()
+        if player:IsValid() then
+            ApplyGlow(player, player._blade_glow:value())
+        end
+    end)
+end)
 local mine_config = {
     BASE_DAMAGE  = 54,
     USES = 100,    

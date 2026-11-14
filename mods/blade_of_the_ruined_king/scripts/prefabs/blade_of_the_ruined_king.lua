@@ -5,6 +5,35 @@ local assets =
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),
 }
 
+local function UpdateGlow(inst)
+    if not inst:IsValid() then return end
+
+    local owner = inst._glow_owner
+    if owner == nil or not owner:IsValid() then return end
+     
+        -- 闪光衰减，防止你用剑打怪/杀怪，光效一直不变
+    inst._flash = math.max(0, (inst._flash or 0) - 0.1)    -- 每0.1s -0.1
+
+    -- 理智越低，光效越强；理智为满的，光效反而越弱
+    local sanity = owner.components.sanity
+    local s = sanity ~= nil and sanity:GetPercent() or 1  -- 没有 sanity 组件的生物默认 1（不加强）
+
+    -- 耐久低于0.3,加随机尖峰 ————> 使“快碎了”更明显
+    local uses = inst.components.finiteuses
+    local dur = uses ~= nil and uses:GetPercent() or 1  -- 没有finiteuses 默认耐久1，不进行光效减弱
+
+    local k = 0.25 + (1 - s) * 0.55 + inst._flash 
+    if dur < 0.3 then   -- sin ——> 正弦，范围：-1 ~ 1
+        k = k * (0.75 + 0.25 * math.sin(GetTime() * 12))
+        if math.random() < 0.06 then k = k + 0.15 end
+    end
+
+    k = math.min(k, 0.85)
+    
+    if owner._blade_glow ~= nil then
+        owner._blade_glow:set(k)
+    end
+end
 
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
@@ -15,16 +44,38 @@ local function onequip(inst, owner)
         -- 符号名 = build.bin 里记录的符号名（= SCML 的 folder/entity 名），不是 PNG 文件名
         owner.AnimState:OverrideSymbol("swap_object", "swap_blade_of_the_ruined_king", "swap_blade_of_the_ruined_king")
     end
+
+    -- 光效(服务端，服务端无法渲染，但是客户端会进行同步渲染)
+    inst._glow_owner = owner;
+    UpdateGlow(inst)          -- 立刻刷一次
+    inst._glow_task = owner:DoPeriodicTask(0.1, function()
+        UpdateGlow(inst)
+    end)
+
     owner.AnimState:Show("ARM_carry")
     owner.AnimState:Hide("ARM_normal")
 end
 
 local function onunequip(inst, owner)
-    owner.AnimState:Hide("ARM_carry")
-    owner.AnimState:Show("ARM_normal")
-    local skin_build = inst:GetSkinBuild()
-    if skin_build ~= nil then
-        owner:PushEvent("unequipskinneditem", inst:GetSkinName())
+    if inst._glow_task ~= nil then
+        -- 把任务从注册表中删除
+        inst._glow_task:Cancel()
+        inst._glow_task = nil
+    end
+    if owner ~= nil and owner:IsValid() then
+        if owner._blade_glow ~= nil then
+            owner._blade_glow:set(0)
+            owner.AnimState:ClearSymbolBloom("swap_object") 
+        end
+        inst._glow_owner = nil
+        inst._flash = 0
+
+        owner.AnimState:Hide("ARM_carry")
+        owner.AnimState:Show("ARM_normal")  
+        local skin_build = inst:GetSkinBuild()
+        if skin_build ~= nil then
+            owner:PushEvent("unequipskinneditem", inst:GetSkinName())
+        end
     end
 end
 
@@ -124,16 +175,11 @@ local function onattack(inst, attacker, target)
     local mine_health = attacker ~= nil and attacker.components.health or nil
     local target_health = target ~= nil and target.components.health or nil
 
+    -- 设定光效 flash
+    inst._flash = 0.35
     -- 雾之锋附带的真实伤害
     if target_health ~= nil and not target_health:IsDead() then
-        --[[
-            1.DST 是 3D 世界：
-                y 是高度（上下）
-                x、z 是地面（前后左右）
-            2.  target.Transform:GetPosition()        -- 本地坐标
-                target.Transform:GetWorldPosition()   -- 世界坐标
-            一般物体两者相同；但如果目标站在船、平台、被父节点挂载的东西上，GetPosition 是相对父节点的，直接拿来 SetPosition 会偏。
-            ]]
+        
         
         local tx, ty, tz  = target.Transform:GetWorldPosition()
         local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
@@ -161,17 +207,8 @@ local function onattack(inst, attacker, target)
         local tx, ty, tz  = target.Transform:GetWorldPosition()
         local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
         spawn_fx("wortox_soul_spawn_fx", tx, ty + 0.5, tz, angle, nil)
-        -- local fx = SpawnPrefab("wortox_soul_spawn_fx")        -- 由此看出特效其实也是prefab
-        -- if fx ~= nil then
-        --     local tx, ty, tz = target.Transform:GetWorldPosition()
-        --     -- 设置特效初始位置
-        --     fx.Transform:SetPosition(tx, ty, tz)
-        --     local ax, ay, az = attacker:GetWorldPosition()
-        --     --attacker:GetAngleToPoint(x, y, z) ——————> “攻击者要朝向 (x, y, z) 这个点，rotation 应该是多少度？
-        --     if ax ~= tx or az ~= tz then
-        --         fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
-        --     end
-        -- end
+        
+        inst._flash = 0.8
     elseif target_health ~= nil then 
 
         -- 抓挠之影 : 同一目标3层→减速30%
@@ -216,6 +253,16 @@ local function onfinished(inst)
     local tx, ty, tz  = inst.Transform:GetWorldPosition()
     spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
     spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
+
+    if inst._glow_task ~= nil then
+        inst._glow_task:Cancel()
+        inst._glow_task = nil
+    end
+    local owner = inst._glow_owner
+    if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
+        owner._blade_glow:set(0)
+        owner.AnimState:ClearSymbolBloom("swap_object") 
+    end
     
     inst:Remove()
 end
@@ -258,7 +305,9 @@ local function fn()
         }
     ]]
     inst._target_vector = {}
-
+    inst._glow_owner = nil
+    inst._glow_task = nil
+    inst._flash = 0   -- flash 是攻击里设置的光效参数，是 onattack 里设的瞬时值：命中：0.35 击杀：0.8
 
     inst:AddComponent("weapon")
     -- inst.components.weapon:SetDamage(TUNING.BLADE_OF_THE_RUINED_KING.DAMAGE)

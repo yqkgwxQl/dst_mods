@@ -16,7 +16,63 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
       image = "inventoryimg_full_64.tex" },{ "WEAPONS" })
       --image 要的是图集里的元素名（看 xml 里的 <Element name="...">），不是文件路径
 
+--[[
+    1.------------------
+    AddPlayerPostInit：在每个玩家实体上执行初始化
+    player：回调传进来的玩家实体
+    net_float：跨客户端同步一个浮点数的网络变量
 
+    2.------------------
+    net_float(guid, name, event)
+        参数	含义
+        guid	挂在哪个实体上，这里用 player.GUID
+        name	变量名，服务器/客户端必须完全一致
+        event	值变化时，在实体上推送的事件名
+
+    3.流程------------------
+    玩家生成
+        → AddPlayerPostInit 执行
+        → 创建 _blade_glow（两端）
+        → 客户端挂上 bladeglowdirty 监听
+
+    装备剑，服务器每 0.1 秒算一次 k
+        → owner._blade_glow:set(k)
+        → 网络同步
+        → 客户端 player 触发 bladeglowdirty
+        → ApplyGlow 读取 k，调用 SetSymbolAddColour / LightOverride
+    ]]
+local function ApplyGlow(player, k)
+    if player.AnimState == nil then return end
+
+    if k <= 0 then
+        player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
+        player.AnimState:SetSymbolLightOverride("swap_object", 0)
+        player.AnimState:ClearSymbolBloom("swap_object")
+        return
+    end
+
+    -- 叠加颜色         (0.08, 0.45, 0.32)  偏暗的蓝绿色 / 深青绿色
+    player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
+    player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
+    player.AnimState:SetSymbolBloom("swap_object")
+end
+
+AddPlayerPostInit(function(player)
+
+    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
+    
+    player:ListenForEvent("bladeglowdirty", function()
+        ApplyGlow(player, player._blade_glow:value())
+    end)
+
+    -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
+    player:DoTaskInTime(0.5, function()
+        if player:IsValid() then
+            ApplyGlow(player, player._blade_glow:value())
+        end
+    end)
+end)
+    
 
 local mine_config = {
     BASE_DAMAGE  = 54,

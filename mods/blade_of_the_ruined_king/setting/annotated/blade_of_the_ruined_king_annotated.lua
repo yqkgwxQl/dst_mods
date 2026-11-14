@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 blade_of_the_ruined_king.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.4
+版本：v1.0.5
 ================================================================================
 ]==]
 
@@ -17,6 +17,25 @@ local assets =
 }
 
 
+local function UpdateGlow(inst)
+    if not inst:IsValid() then return end
+    local owner = inst._glow_owner
+    if owner == nil or not owner:IsValid() then return end
+    inst._flash = math.max(0, (inst._flash or 0) - 0.1)    -- 每0.1s -0.1
+    local sanity = owner.components.sanity
+    local s = sanity ~= nil and sanity:GetPercent() or 1  -- 没有 sanity 组件的生物默认 1（不加强）
+    local uses = inst.components.finiteuses
+    local dur = uses ~= nil and uses:GetPercent() or 1  -- 没有finiteuses 默认耐久1，不进行光效减弱
+    local k = 0.25 + (1 - s) * 0.55 + inst._flash 
+    if dur < 0.3 then   -- sin ——> 正弦，范围：-1 ~ 1
+        k = k * (0.75 + 0.25 * math.sin(GetTime() * 12))
+        if math.random() < 0.06 then k = k + 0.15 end
+    end
+    k = math.min(k, 0.85)
+    if owner._blade_glow ~= nil then
+        owner._blade_glow:set(k)
+    end
+end
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
     if skin_build ~= nil then
@@ -33,16 +52,82 @@ local function onequip(inst, owner)
         手持是 OverrideSymbol 到角色的 swap_object，引擎按时间取样播放这个符号。duration = 1 时这一帧几乎瞬间过期，引擎取不到可画的帧 → 什么都不画；
             ]]
     end
+            --[[
+        1.-------------------------------------------------------------------------------
+        owner.AnimState:SetSymbolBloom("swap_object"): 把角色身上的 swap_object 这个符号标记为“参与泛光渲染”。
+            此时 swap_object 已经被 OverrideSymbol 映射成了你的武器贴图，所以这句相当于：“角色手上这把剑，请给它加泛光。”
+
+
+        2.-------------------------------------------------------------------------------
+            API                     作用                           是否受画质设置影响
+        SetSymbolBloom          亮部产生光晕（后处理）              是，低画质可能关闭 bloom
+        SetSymbolLightOverride  让符号在黑暗中“自发光”              否
+        SetSymbolAddColour      直接叠加颜色                        否
+        三者一般配合使用：
+        ~~~
+            owner.AnimState:SetSymbolBloom("swap_object")                 -- 光晕
+            owner.AnimState:SetSymbolLightOverride("swap_object", 0.35)   -- 暗处可见
+            owner.AnimState:SetSymbolAddColour("swap_object", 0.05,0.3,0.2,0) -- 呼吸色
+        ~~~
+
+
+        3.-------------------------------------------------------------------------------
+        我想知道SetSymbolBloom() 怎么知道贴图哪里应该发光呢？
+            SetSymbolBloom 只负责“开/关”，光晕强弱由贴图亮度和画质决定 ————> 只有贴图里本来就亮的区域（剑刃核心）才会亮。
+
+        Bloom 的基本流程
+        ~~~
+            1. 角色和武器正常渲染
+            2. 引擎把画面里“足够亮”的像素挑出来
+            3. 对这些像素做模糊（Gaussian / downsample）
+            4. 把模糊后的光晕叠加回原画面
+        ~~~
+        所以“哪里发光”= 哪里在最终画面里足够亮，不是贴图里画了一条“发光通道”。
+
+        therefore不能“指定某一块发光”
+            不能直接用 SetSymbolBloom 指定区域，但可以间接控制：
+        eg:
+            想要的效果	    做法
+            只有刃口发光	贴图里把刃口画到接近白，其他压暗
+            只有裂纹发光	把裂纹画成独立的高亮层，或单独做一个 FX
+            整体更亮	SetSymbolAddColour 提高亮度（会连带影响泛光）
+            整体更暗	SetSymbolMultColour 压暗（泛光会减弱）
+            低理智更亮	脉冲式提高 AddColour，亮度上去，泛光自然变强
+            ]]
+    inst._glow_owner = owner;
+    UpdateGlow(inst)          -- 立刻刷一次
+    inst._glow_task = owner:DoPeriodicTask(0.1, function()
+        UpdateGlow(inst)
+    end)
     owner.AnimState:Show("ARM_carry")
     owner.AnimState:Hide("ARM_normal")
 end
 
 local function onunequip(inst, owner)
-    owner.AnimState:Hide("ARM_carry")
-    owner.AnimState:Show("ARM_normal")
-    local skin_build = inst:GetSkinBuild()
-    if skin_build ~= nil then
-        owner:PushEvent("unequipskinneditem", inst:GetSkinName())
+    if inst._glow_task ~= nil then
+        -- 把任务从注册表中删除
+        inst._glow_task:Cancel()
+        inst._glow_task = nil
+    end
+    if owner ~= nil and owner:IsValid() then
+        -- 对SetSymbolBloom("swap_object") 的标记进行删除
+        if owner._blade_glow ~= nil then
+            owner._blade_glow:set(0)
+            owner.AnimState:ClearSymbolBloom("swap_object") 
+        end
+        inst._glow_owner = nil
+
+
+
+
+
+        inst._flash = 0
+        owner.AnimState:Hide("ARM_carry")
+        owner.AnimState:Show("ARM_normal")  
+        local skin_build = inst:GetSkinBuild()
+        if skin_build ~= nil then
+            owner:PushEvent("unequipskinneditem", inst:GetSkinName())
+        end
     end
 end
 local function spawn_fx(fx_name, x, y, z, angle, scale)
@@ -159,7 +244,18 @@ local function onattack(inst, attacker, target)
     local mine_health = attacker ~= nil and attacker.components.health or nil
     local target_health = target ~= nil and target.components.health or nil
 
+    -- 设定光效 flash
+    inst._flash = 0.35
+
     -- 雾之锋附带的真实伤害
+    --[[
+        1.DST 是 3D 世界：
+            y 是高度（上下）
+            x、z 是地面（前后左右）
+        2.  target.Transform:GetPosition()        -- 本地坐标
+            target.Transform:GetWorldPosition()   -- 世界坐标
+        一般物体两者相同；但如果目标站在船、平台、被父节点挂载的东西上，GetPosition 是相对父节点的，直接拿来 SetPosition 会偏。
+        ]]
     if target_health ~= nil and not target_health:IsDead() then
         local tx, ty, tz  = target.Transform:GetWorldPosition()
         local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
@@ -185,6 +281,18 @@ local function onattack(inst, attacker, target)
         local tx, ty, tz  = target.Transform:GetWorldPosition()
         local angle = attacker ~= nil and attacker:GetAngleToPoint(tx, ty, tz) or nil
         spawn_fx("wortox_soul_spawn_fx", tx, ty + 0.5, tz, angle, nil)
+        -- local fx = SpawnPrefab("wortox_soul_spawn_fx")        -- 由此看出特效其实也是prefab
+        -- if fx ~= nil then
+        --     local tx, ty, tz = target.Transform:GetWorldPosition()
+        --     -- 设置特效初始位置
+        --     fx.Transform:SetPosition(tx, ty, tz)
+        --     local ax, ay, az = attacker:GetWorldPosition()
+        --     --attacker:GetAngleToPoint(x, y, z) ——————> “攻击者要朝向 (x, y, z) 这个点，rotation 应该是多少度？
+        --     if ax ~= tx or az ~= tz then
+        --         fx.Transform:SetRotation(attacker:GetAngleToPoint(tx, ty, tz))
+        --     end
+        -- end
+        inst._flash = 0.8
     elseif target_health ~= nil then 
 
         -- 抓挠之影 : 同一目标3层→减速30%
@@ -229,6 +337,15 @@ local function onfinished(inst)
     local tx, ty, tz  = inst.Transform:GetWorldPosition()
     spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
     spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
+    if inst._glow_task ~= nil then
+        inst._glow_task:Cancel()
+        inst._glow_task = nil
+    end
+    local owner = inst._glow_owner
+    if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
+        owner._blade_glow:set(0)
+        owner.AnimState:ClearSymbolBloom("swap_object") 
+    end
     inst:Remove()
 end
 
@@ -322,6 +439,9 @@ local function fn()
     inst._target_vector = {}
 
 
+    inst._glow_owner = nil
+    inst._glow_task = nil
+    inst._flash = 0   -- flash 是攻击里设置的光效参数，是 onattack 里设的瞬时值：命中：0.35 击杀：0.8
     inst:AddComponent("weapon")
     -- inst.components.weapon:SetDamage(TUNING.BLADE_OF_THE_RUINED_KING.DAMAGE)
     inst.components.weapon:SetDamage(get_damage)
