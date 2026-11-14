@@ -27,7 +27,7 @@ if ([string]::IsNullOrWhiteSpace($GameDir)) {
 
 
 # tools\ 的父目录就是仓库根
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $dest = Join-Path $repo 'refs\other_reference\scripts'
 $zip  = Join-Path $GameDir 'data\databundles\scripts.zip'
 $ver  = Join-Path $GameDir 'version.txt'

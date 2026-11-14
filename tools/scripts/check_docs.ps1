@@ -5,7 +5,7 @@
         靠人记着同步迟早会错位。这个脚本把"不同步"从靠人发现变成跑一条命令。
 
   用法：
-    .\tools\check_docs.ps1
+    .\tools\scripts\check_docs.ps1
 
   退出码：0 = 全部通过；1 = 有 FAIL
 #>
@@ -13,7 +13,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $script:pass = 0
 $script:fail = 0
 $script:warn = 0
@@ -37,7 +37,7 @@ Write-Host "[1] 必备文件" -ForegroundColor Cyan
 $required = @(
     'README.md', 'LICENSE', '.gitignore',
     'docs\MOD测试手册.md', 'docs\工作区约定.md',
-    'tools\prepare_refs.ps1', 'tools\clean_scratch.ps1'
+    'tools\scripts\prepare_refs.ps1', 'tools\scripts\clean_scratch.ps1'
 )
 foreach ($f in $required) {
     Check $f (Test-Path -LiteralPath (Join-Path $repo $f)) $(if (Test-Path -LiteralPath (Join-Path $repo $f)) { '存在' } else { '缺失!' })
@@ -46,7 +46,7 @@ foreach ($f in $required) {
 # ---------- 2) 核心目录 ----------
 Write-Host ""
 Write-Host "[2] 核心目录" -ForegroundColor Cyan
-$dirs = @('mods','docs','tools','refs','tools\app','tools\cli','tools\gui',
+$dirs = @('mods','docs','tools','refs','tools\app','tools\cli','tools\gui','tools\scripts',
           'refs\mod_reference','refs\other_reference','_scratch','_trash')
 foreach ($d in $dirs) {
     $ok = Test-Path -LiteralPath (Join-Path $repo $d)

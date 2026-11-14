@@ -54,7 +54,7 @@
 - 重建工作副本用仓库里的脚本，不要手工解压：
 
 ```powershell
-.\tools\prepare_refs.ps1
+.\tools\scripts\prepare_refs.ps1
 ```
 
 - 游戏更新后（`version.txt` 变化）必须重新解压，否则查到的是旧版本 API。
@@ -483,12 +483,12 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 ### 12.3 维护规则
 
 1. **`refs\` 不进 git**：游戏源码与第三方素材，约 270 MB，且涉及版权，已在 `.gitignore` 排除。
-2. **换机器要重建**：跑 `tools\prepare_refs.ps1`：
+2. **换机器要重建**：跑 `tools\scripts\prepare_refs.ps1`：
 
    ```
-   powershell -ExecutionPolicy Bypass -File .\tools\prepare_refs.ps1
-   powershell -ExecutionPolicy Bypass -File .\tools\prepare_refs.ps1 -Force      # 覆盖已有
-   powershell -ExecutionPolicy Bypass -File .\tools\prepare_refs.ps1 -GameDir "D:\Games\Don't Starve Together"
+   powershell -ExecutionPolicy Bypass -File .\tools\scripts\prepare_refs.ps1
+   powershell -ExecutionPolicy Bypass -File .\tools\scripts\prepare_refs.ps1 -Force      # 覆盖已有
+   powershell -ExecutionPolicy Bypass -File .\tools\scripts\prepare_refs.ps1 -GameDir "D:\Games\Don't Starve Together"
    ```
 
    脚本会：校验 zip 首 4 字节是不是 `PK\x03\x04`（不是所有 `.zip` 都是标准 zip）、只取 `scripts/` 前缀、解到 `refs\other_reference\scripts`、输出文件数与游戏版本号。实测 4109 个文件、约 32 秒。**它只重建 scripts 这一项**，`mod_reference` / `Wilson_sample` / `notes` / `modtemplate` 是人工整理的，不重建。

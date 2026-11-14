@@ -16,14 +16,17 @@
     mods 目录，默认是仓库根下的 mods。
 
 .EXAMPLE
-    .\tools\check_anim_duration.ps1
+    .\tools\scripts\check_anim_duration.ps1
 #>
 [CmdletBinding()]
 param(
-    [string]$ModsRoot = (Join-Path $PSScriptRoot '..\mods')
+    [string]$ModsRoot
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($ModsRoot)) {
+    $ModsRoot = Join-Path $PSScriptRoot '..\..\mods'
+}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Read-String([byte[]]$Bytes, [int]$Offset) {
@@ -89,11 +92,19 @@ foreach ($mod in $mods) {
             $memory.Dispose()
         } finally { $archive.Dispose() }
 
+        $isSwap = (Split-Path $zip -Leaf) -match 'swap'
         $frames = Get-FrameInfo $bytes
         foreach ($fr in $frames) {
             $total++
             $flag = ''
-            if ($fr.Duration -le 1) { $bad++; $flag = '  <-- 可疑（duration <= 1，手持会不显示）' }
+            if ($fr.Duration -le 1) {
+                if ($isSwap) {
+                    $bad++
+                    $flag = '  <-- 可疑（swap build 的 duration <= 1，手持会不显示）'
+                } else {
+                    $flag = '  （地面/静态 build，duration 1 通常正常）'
+                }
+            }
             Write-Host ('{0,-14} {1,-40} symbol {2} frame {3} duration {4} size {5}{6}' -f `
                     $mod.Name, (Split-Path $zip -Leaf), $fr.Symbol, $fr.Frame, $fr.Duration, $fr.Size, $flag)
         }
@@ -102,9 +113,9 @@ foreach ($mod in $mods) {
 
 Write-Host ''
 if ($bad -eq 0) {
-    Write-Host "OK：$total 个帧的 duration 都 > 1。" -ForegroundColor Green
+    Write-Host "OK：$total 个帧里没有 swap build 的 duration <= 1。" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "发现 $bad 个 duration <= 1 的帧（共 $total 帧）。回 DST Mod Tool 里把 Duration 改成 8 再导出。" -ForegroundColor Yellow
+    Write-Host "发现 $bad 个 swap build 的 duration <= 1（共 $total 帧）。回 DST Mod Tool 里把 Duration 改成 8 再导出。" -ForegroundColor Yellow
     exit 1
 }

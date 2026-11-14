@@ -3,7 +3,7 @@
 # 把「精简 .lua」里的代码改动，同步进「注释存档 .lua」，并刷新头部说明。
 #
 # 用法（仓库根目录）：
-#   powershell -ExecutionPolicy Bypass -File tools\sync_annotated.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\scripts\sync_annotated.ps1
 #
 # 规则：
 #   - 只同步“代码行”，注释行（含 --[[ ]] 块内文字）与空行原样保留
@@ -13,7 +13,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $mod  = Join-Path $root 'mods\blade_of_the_ruined_king'
 $enc  = New-Object Text.UTF8Encoding($false)
 
@@ -71,7 +71,7 @@ function Build-Header($title, $slimName, $version) {
         '================================================================================'
         '用途：完整保留注释与代码，供翻阅、检索、讲解。'
         "注意：本文件不参与游戏加载；实际代码以 $slimName 为准，请勿在此修改。"
-        '同步：改完精简版后，运行 tools\sync_annotated.ps1 重新生成本文件。'
+        '同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。'
         "版本：v$version"
         '================================================================================'
         ']==]'

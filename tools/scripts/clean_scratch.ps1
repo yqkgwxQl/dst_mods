@@ -5,10 +5,10 @@
         三个月后 _scratch 就会变成第二个 wd。
 
   用法：
-    .\tools\clean_scratch.ps1                     预演：只列出，什么都不删
-    .\tools\clean_scratch.ps1 -OlderThanDays 3    删除 3 天没动过的子目录
-    .\tools\clean_scratch.ps1 -All -Force         全部清掉
-    .\tools\clean_scratch.ps1 -All -Force -MoveToTrash   先移进 _trash\ 再删
+    .\tools\scripts\clean_scratch.ps1                     预演：只列出，什么都不删
+    .\tools\scripts\clean_scratch.ps1 -OlderThanDays 3    删除 3 天没动过的子目录
+    .\tools\scripts\clean_scratch.ps1 -All -Force         全部清掉
+    .\tools\scripts\clean_scratch.ps1 -All -Force -MoveToTrash   先移进 _trash\ 再删
 
   安全设计：
     * 无参数时一定是预演，不会误删
@@ -25,7 +25,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repo    = Split-Path -Parent $PSScriptRoot
+$repo    = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $scratch = Join-Path $repo '_scratch'
 $trash   = Join-Path $repo '_trash'
 
@@ -85,7 +85,7 @@ if ($All) {
         Write-Host ""
         Write-Host "-All 会删掉全部 $($dirs.Count) 个目录（$totalMB MB）。" -ForegroundColor Yellow
         Write-Host "确认要执行，请加 -Force：" -ForegroundColor Yellow
-        Write-Host "   .\tools\clean_scratch.ps1 -All -Force" -ForegroundColor Yellow
+        Write-Host "   .\tools\scripts\clean_scratch.ps1 -All -Force" -ForegroundColor Yellow
         return
     }
     $targets = $rows
@@ -96,8 +96,8 @@ elseif ($OlderThanDays -gt 0) {
 else {
     Write-Host ""
     Write-Host "[预演] 什么都没有删。要真删请选一种：" -ForegroundColor Green
-    Write-Host "   .\tools\clean_scratch.ps1 -OlderThanDays 3    # 删 3 天没动的"
-    Write-Host "   .\tools\clean_scratch.ps1 -All -Force         # 全删"
+    Write-Host "   .\tools\scripts\clean_scratch.ps1 -OlderThanDays 3    # 删 3 天没动的"
+    Write-Host "   .\tools\scripts\clean_scratch.ps1 -All -Force         # 全删"
     return
 }
 

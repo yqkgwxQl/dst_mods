@@ -86,12 +86,19 @@
 
 ## 五、素材清单
 
-| 文件 | 内容 | 规格 | 用途 |
-|---|---|---|---|
-| `asset/blade_of_the_ruined_king.png` | 武器图（透明底） | 64 × 256 | 游戏内武器贴图来源 |
-| `asset/RuinedKing_KeyArt.jpg` | 官方美宣（佛耶戈 + 剑 + 黑雾） | 1215 × 717 | 配色 / 黑雾 / 构图参考 |
-| `asset/viego_view_front.png` | 3D 模型正面截图 | 1330 × 697 | 人物 mod 参考 |
-| `asset/viego_base.glb` | Viego 3D 模型（含 Sword / Crown 材质） | 9.7 MB | 人物 mod 的三视图参考 |
+素材统一放在：
+
+```
+F:\zhongzhuan\dst_mods\refs\mod_reference\blade_of_the_ruined_king\assets
+```
+
+| 内容 | 位置 |
+|---|---|
+| 当前使用贴图 | `assets\current\commit\` |
+| 历史版本（v1–v3） | `assets\old_version\` |
+| 官方美宣 | `assets\RuinedKing_KeyArt.jpg` |
+| Viego 3D 模型与截图 | 已归档到 `_trash/blade_setting_asset_2026-11-14/` |
+| AI 美术协作流程 | `setting/asset/AI_协作流程.md` |
 
 > **版权**：素材归 Riot Games 所有。参考重绘可以，**不要把模型、原画直接打包进 mod 发布**。
 
