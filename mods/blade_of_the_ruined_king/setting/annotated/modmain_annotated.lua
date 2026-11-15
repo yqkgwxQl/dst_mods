@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 modmain.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.5
+版本：v1.0.6
 ================================================================================
 ]==]
 
@@ -70,7 +70,6 @@
 -- ========================================================================================================
 -- ========================================================================================================
 
-PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 --[[
     1.why 不是ProfabFiles = {"scripts/prefabs"}呢？
         PrefabFiles 里写的是“prefab 文件名”，不是“路径”；路径是引擎自己拼的，而且 scripts/ 和 prefabs/ 这两段它都帮你加好了。
@@ -142,9 +141,11 @@ PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_o
     modmain 里的全局 Assets       整个 mod                mod 启动时一次性预载             UI 图集、要随时用的公共资源
         modmain 的 Assets 会被挂到一个自动生成的 MOD_<mod名> prefab 上，启动时 LoadPrefabs 预载
     ]]
+PrefabFiles = {"blade_of_the_ruined_king", "blade_glow_fx"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 Assets = {
     Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),   
     Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),   
+    Asset("ANIM", "anim/blade_glow_fx.zip"),   
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),   
 }       
 
@@ -188,29 +189,35 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
         → ApplyGlow 读取 k，调用 SetSymbolAddColour / LightOverride
     ]]
     
-local function ApplyGlow(player, k)
-    if player.AnimState == nil then return end
-    if k <= 0 then
-        player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
-        player.AnimState:SetSymbolLightOverride("swap_object", 0)
-        player.AnimState:ClearSymbolBloom("swap_object")
-        return
-    end
-    player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
-    player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
-    player.AnimState:SetSymbolBloom("swap_object")
-end
-AddPlayerPostInit(function(player)
-    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
-    player:ListenForEvent("bladeglowdirty", function()
-        ApplyGlow(player, player._blade_glow:value())
-    end)
-    player:DoTaskInTime(0.5, function()
-        if player:IsValid() then
-            ApplyGlow(player, player._blade_glow:value())
-        end
-    end)
-end)
+-- local function ApplyGlow(player, k)
+--     if player.AnimState == nil then return end
+--     if k <= 0 then
+--         player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
+--         player.AnimState:SetSymbolLightOverride("swap_object", 0)
+--         player.AnimState:ClearSymbolBloom("swap_object")
+--         return
+--     end
+--     player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
+--     player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
+--     player.AnimState:SetSymbolBloom("swap_object")
+-- end
+
+-- AddPlayerPostInit(function(player)
+
+--     player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
+    
+--     player:ListenForEvent("bladeglowdirty", function()
+--         ApplyGlow(player, player._blade_glow:value())
+--     end)
+
+--     -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
+--     player:DoTaskInTime(0.5, function()
+--         if player:IsValid() then
+--             ApplyGlow(player, player._blade_glow:value())
+--         end
+--     end)
+-- end)
+    
 local mine_config = {
     BASE_DAMAGE  = 54,
     USES = 100,    

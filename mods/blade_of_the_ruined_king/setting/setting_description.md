@@ -95,6 +95,7 @@ F:\zhongzhuan\dst_mods\refs\mod_reference\blade_of_the_ruined_king\assets
 | 内容 | 位置 |
 |---|---|
 | 当前使用贴图 | `assets\current\commit\` |
+| 光晕层（v1.0.6） | `assets\current\commit\blade_glow.png` |
 | 历史版本（v1–v3） | `assets\old_version\` |
 | 官方美宣 | `assets\RuinedKing_KeyArt.jpg` |
 | Viego 3D 模型与截图 | 已归档到 `_trash/blade_setting_asset_2026-11-14/` |
@@ -114,6 +115,6 @@ F:\zhongzhuan\dst_mods\refs\mod_reference\blade_of_the_ruined_king\assets
 | 抓挠之影：三击减速 | 同一目标叠 3 层印记 → 减速 + 黑雾爪痕 |
 | 生命偷取 | 命中回少量血，击杀回更多 |
 | 破败之咒：以理智为代价 | 装备时持续掉理智；低理智时反而更强 |
-| 剑会“碎” | 耐久耗尽时掉 2 个噩梦燃料（黑雾爆散特效待做） |
+| 剑会“碎” | 耐久耗尽时掉 2 个噩梦燃料（黑雾爆散特效已完成，v1.0.3） |
 
 详细数值与实现见 [mechanic_design.md](mechanic_design.md)。

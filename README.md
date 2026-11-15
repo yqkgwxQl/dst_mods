@@ -37,7 +37,7 @@ A work-in-progress collection of Don't Starve Together mods.
 
 > 永失吾爱，举目破败
 
-**状态**：P0 数值、P1 机制、P2 战斗特效已完成并通过验证；贴图已换成三护手分件版本（武器 + 黑雾，v1.0.4）。夜晚发光已完成（v1.0.5），剩余 P3 项：常驻剑雾、低耐久裂纹、配置项。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
+**状态**：P0 数值、P1 机制、P2 战斗特效已完成并通过验证；贴图已换成三护手分件版本（武器 + 黑雾，v1.0.4）；夜晚发光已完成（v1.0.5）；v1.0.6 加入独立光晕 FX（`blade_glow_fx`，**FollowSymbol 只跟随位置、旋转问题待解决**）。剩余 P3 项：常驻剑雾、低耐久裂纹、配置项。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
 
 ---
 
@@ -67,7 +67,7 @@ A work-in-progress collection of Don't Starve Together mods.
 ├─ mods/     各个模组的源码（进仓库）
 ├─ docs/     测试手册、工具笔记（进仓库）
 ├─ refs/     游戏 Lua 源码与参考资料（不进仓库，可重建）
-└─ tools/    开发工具（脚本与说明文档进仓库，第三方二进制仅本地）
+└─ tools/    开发工具（脚本与说明文档进仓库；第三方二进制、官方源码仅本地）
 ```
 
 - **测试手册**：[docs/MOD测试手册.md](docs/MOD测试手册.md) —— 分层的测试方法与故障排查

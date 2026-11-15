@@ -30,8 +30,11 @@ local function UpdateGlow(inst)
 
     k = math.min(k, 0.85)
     
-    if owner._blade_glow ~= nil then
-        owner._blade_glow:set(k)
+    -- if owner._blade_glow ~= nil then
+    --     owner._blade_glow:set(k)
+    -- end
+    if inst._glow_fx and inst._glow_fx._glow_alpha then
+        inst._glow_fx._glow_alpha:set(0.25 + 0.5 * k)
     end
 end
 
@@ -46,6 +49,13 @@ local function onequip(inst, owner)
     end
 
     -- 光效(服务端，服务端无法渲染，但是客户端会进行同步渲染)
+    
+    inst._glow_fx = SpawnPrefab("blade_glow_fx")
+    if inst._glow_fx ~= nil then
+            -- 需要设置父节点
+        inst._glow_fx.entity:SetParent(owner.entity)
+        inst._glow_fx.Follower:FollowSymbol(owner.GUID, "swap_object", 0, 0, 0)
+    end
     inst._glow_owner = owner;
     UpdateGlow(inst)          -- 立刻刷一次
     inst._glow_task = owner:DoPeriodicTask(0.1, function()
@@ -62,14 +72,19 @@ local function onunequip(inst, owner)
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
+
+    if inst._glow_fx ~= nil then
+        inst._glow_fx:Remove()
+        inst._glow_fx = nil
+    end
     if owner ~= nil and owner:IsValid() then
-        if owner._blade_glow ~= nil then
-            owner._blade_glow:set(0)
-            owner.AnimState:ClearSymbolBloom("swap_object") 
-        end
+        -- if owner._blade_glow ~= nil then
+        --     owner._blade_glow:set(0)
+        --     owner.AnimState:ClearSymbolBloom("swap_object") 
+        -- end
         inst._glow_owner = nil
         inst._flash = 0
-
+        
         owner.AnimState:Hide("ARM_carry")
         owner.AnimState:Show("ARM_normal")  
         local skin_build = inst:GetSkinBuild()
@@ -258,10 +273,15 @@ local function onfinished(inst)
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
-    local owner = inst._glow_owner
-    if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
-        owner._blade_glow:set(0)
-        owner.AnimState:ClearSymbolBloom("swap_object") 
+    -- local owner = inst._glow_owner
+    -- if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
+    --     owner._blade_glow:set(0)
+    --     owner.AnimState:ClearSymbolBloom("swap_object") 
+    -- end
+
+    if inst._glow_fx ~= nil then
+        inst._glow_fx:Remove()
+        inst._glow_fx = nil
     end
     
     inst:Remove()
@@ -305,9 +325,12 @@ local function fn()
         }
     ]]
     inst._target_vector = {}
+    -- glow-version 1
     inst._glow_owner = nil
     inst._glow_task = nil
     inst._flash = 0   -- flash 是攻击里设置的光效参数，是 onattack 里设的瞬时值：命中：0.35 击杀：0.8
+    -- glow-version 2
+    inst._glow_fx = nil
 
     inst:AddComponent("weapon")
     -- inst.components.weapon:SetDamage(TUNING.BLADE_OF_THE_RUINED_KING.DAMAGE)

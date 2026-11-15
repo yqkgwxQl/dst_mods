@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 blade_of_the_ruined_king.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.5
+版本：v1.0.6
 ================================================================================
 ]==]
 
@@ -32,10 +32,14 @@ local function UpdateGlow(inst)
         if math.random() < 0.06 then k = k + 0.15 end
     end
     k = math.min(k, 0.85)
-    if owner._blade_glow ~= nil then
-        owner._blade_glow:set(k)
+    -- if owner._blade_glow ~= nil then
+    --     owner._blade_glow:set(k)
+    -- end
+    if inst._glow_fx and inst._glow_fx._glow_alpha then
+        inst._glow_fx._glow_alpha:set(0.25 + 0.5 * k)
     end
 end
+
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
     if skin_build ~= nil then
@@ -52,7 +56,19 @@ local function onequip(inst, owner)
         手持是 OverrideSymbol 到角色的 swap_object，引擎按时间取样播放这个符号。duration = 1 时这一帧几乎瞬间过期，引擎取不到可画的帧 → 什么都不画；
             ]]
     end
-            --[[
+    -- 光效(服务端，服务端无法渲染，但是客户端会进行同步渲染)
+    
+    inst._glow_fx = SpawnPrefab("blade_glow_fx")
+    if inst._glow_fx ~= nil then
+        inst._glow_fx.entity:SetParent(owner.entity)
+        inst._glow_fx.Follower:FollowSymbol(owner.GUID, "swap_object", 0, 0, 0)
+    end
+    inst._glow_owner = owner;
+    UpdateGlow(inst)          -- 立刻刷一次
+    inst._glow_task = owner:DoPeriodicTask(0.1, function()
+        UpdateGlow(inst)
+    end)
+        --[[
         1.-------------------------------------------------------------------------------
         owner.AnimState:SetSymbolBloom("swap_object"): 把角色身上的 swap_object 这个符号标记为“参与泛光渲染”。
             此时 swap_object 已经被 OverrideSymbol 映射成了你的武器贴图，所以这句相当于：“角色手上这把剑，请给它加泛光。”
@@ -93,35 +109,46 @@ local function onequip(inst, owner)
             整体更亮	SetSymbolAddColour 提高亮度（会连带影响泛光）
             整体更暗	SetSymbolMultColour 压暗（泛光会减弱）
             低理智更亮	脉冲式提高 AddColour，亮度上去，泛光自然变强
+        4.-------------------------------------------------------------------------------
+        owner.AnimState:SetSymbolLightOverride()和owner.AnimState:SetSymbolAddColour()实际原理
+        1.--------------------------
+        SetSymbolAddColour(symbol, r, g, b, a)
+            最终颜色 = 贴图颜色 × 光照 + (r, g, b)
+            近似理解：
+                贴图像素	加色后
+                暗部 (0.05)	0.05 + 0.1 → 变亮
+                亮部 (0.9)	0.9 + 0.1 → 过曝偏白
+        2.--------------------------
+        SetSymbolLightOverride(symbol, value)
+        原理
+            最终亮度 = 贴图颜色 × 环境光照
+        夜晚环境光照接近 0，剑就变黑。
+
+        LightOverride(v) 强制这个符号至少按 v 的亮度来画：
+            最终亮度 = 贴图颜色 × max(环境光照, v)
             ]]
-    inst._glow_owner = owner;
-    UpdateGlow(inst)          -- 立刻刷一次
-    inst._glow_task = owner:DoPeriodicTask(0.1, function()
-        UpdateGlow(inst)
-    end)
     owner.AnimState:Show("ARM_carry")
     owner.AnimState:Hide("ARM_normal")
 end
 
 local function onunequip(inst, owner)
-    if inst._glow_task ~= nil then
         -- 把任务从注册表中删除
+    if inst._glow_task ~= nil then
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
+    if inst._glow_fx ~= nil then
+        inst._glow_fx:Remove()
+        inst._glow_fx = nil
+    end
     if owner ~= nil and owner:IsValid() then
-        -- 对SetSymbolBloom("swap_object") 的标记进行删除
-        if owner._blade_glow ~= nil then
-            owner._blade_glow:set(0)
-            owner.AnimState:ClearSymbolBloom("swap_object") 
-        end
+        -- if owner._blade_glow ~= nil then
+        --     owner._blade_glow:set(0)
+        --     owner.AnimState:ClearSymbolBloom("swap_object") 
+        -- end
         inst._glow_owner = nil
-
-
-
-
-
         inst._flash = 0
+        
         owner.AnimState:Hide("ARM_carry")
         owner.AnimState:Show("ARM_normal")  
         local skin_build = inst:GetSkinBuild()
@@ -333,7 +360,6 @@ local function onfinished(inst)
             fuel.Transform:SetPosition(pos.x + ox, pos.y, pos.z + oz)
         end
     end
-    -- 想加音效/黑雾特效？？？？
     local tx, ty, tz  = inst.Transform:GetWorldPosition()
     spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
     spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
@@ -341,11 +367,22 @@ local function onfinished(inst)
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
-    local owner = inst._glow_owner
-    if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
-        owner._blade_glow:set(0)
-        owner.AnimState:ClearSymbolBloom("swap_object") 
+    -- 想加音效/黑雾特效
+    -- if inst._glow_task ~= nil then
+    --     inst._glow_task:Cancel()
+    --     inst._glow_task = nil
+    -- end
+    -- local owner = inst._glow_owner
+    -- if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
+    --     owner._blade_glow:set(0)
+    --     owner.AnimState:ClearSymbolBloom("swap_object") 
+    -- end
+
+    if inst._glow_fx ~= nil then
+        inst._glow_fx:Remove()
+        inst._glow_fx = nil
     end
+
     inst:Remove()
 end
 
@@ -355,7 +392,11 @@ local function fn()
     inst.entity:AddTransform()
     inst.entity:AddAnimState()
     inst.entity:AddNetwork()
-
+    -- 给物品实体添加地面物理属性
+        -- 它的主要作用是让物品掉到地上时能：
+        -- 正常放在地面上
+        -- 有碰撞/物理表现
+        -- 看起来像可拾取物品
     MakeInventoryPhysics(inst)
 
     inst.AnimState:SetBank("blade_of_the_ruined_king")
@@ -437,11 +478,12 @@ local function fn()
         }
     ]]
     inst._target_vector = {}
-
-
+    -- glow-version1
     inst._glow_owner = nil
     inst._glow_task = nil
     inst._flash = 0   -- flash 是攻击里设置的光效参数，是 onattack 里设的瞬时值：命中：0.35 击杀：0.8
+    -- glow-version2
+    inst._glow_fx = nil
     inst:AddComponent("weapon")
     -- inst.components.weapon:SetDamage(TUNING.BLADE_OF_THE_RUINED_KING.DAMAGE)
     inst.components.weapon:SetDamage(get_damage)

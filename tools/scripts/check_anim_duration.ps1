@@ -1,121 +1,215 @@
 <#
 .SYNOPSIS
-    检查 mod 动画包（build.bin）里每个符号帧的 duration。
+    检查 mod 动画包（zip）的结构、帧时长、build/symbol 名与锚点几何。
 
 .DESCRIPTION
-    DST 的“手持符号”是按时间播放的：override 到 swap_object 之后，引擎按帧时长取样。
-    duration = 1 时这一帧几乎立即过期，表现为「override 明明挂上了，手上却什么都不显示」，
-    而同一个 build 当“地面实体”显示完全正常（地面是静态画法，不随时间取样）。
+    检查内容：
+    1. zip 条目：build.bin、atlas-0.tex（anim.bin 可选）
+    2. build 名、symbol 名
+    3. 每个 symbol 的 frame 坐标（x / y / w / h）与 duration
+    4. atlas-0.tex 能否解码、尺寸
+    5. swap build 的 duration <= 1 报警（手持会不显示）
+    6. 可选：和参考 zip 对比 frame 几何（锚点是否一致）
 
-    实测：DST Mod Tool 对“单关键帧”的动画会导出 duration = 1；
-    原版所有 swap 包的 duration 都在 2~8。把 1 改成 8 即可正常显示。
-
-    导出动画后跑一次这个脚本，发现 duration = 1 就回工具里把 Duration 改成 8 再导出。
+    依赖：python（调用 cli.py）、tools/cli/stex/stex.exe。
 
 .PARAMETER ModsRoot
     mods 目录，默认是仓库根下的 mods。
 
+.PARAMETER Zip
+    只检查指定的 zip；不传则扫描 ModsRoot 下所有 anim/*.zip。
+
+.PARAMETER ExpectBuild
+    期望的 build 名；传了会校验 build 名和第一个 symbol 名。
+
+.PARAMETER RefZip
+    参考 zip；传了会比较第一个 symbol 的 frame x/y/w/h。
+
 .EXAMPLE
     .\tools\scripts\check_anim_duration.ps1
+
+.EXAMPLE
+    .\tools\scripts\check_anim_duration.ps1 -Zip mods\blade_of_the_ruined_king\anim\blade_glow_fx.zip -ExpectBuild blade_glow_fx
 #>
 [CmdletBinding()]
 param(
-    [string]$ModsRoot
+    [string]$ModsRoot,
+    [string]$Zip,
+    [string]$ExpectBuild,
+    [string]$RefZip
 )
 
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($ModsRoot)) {
     $ModsRoot = Join-Path $PSScriptRoot '..\..\mods'
 }
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$cli = Join-Path $repo 'tools\cli\pyscripts\cli.py'
+$stex = Join-Path $repo 'tools\cli\stex\stex.exe'
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if ($null -eq $python) { Write-Host "找不到 python，无法调用 cli.py" -ForegroundColor Red; exit 2 }
+
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-function Read-String([byte[]]$Bytes, [int]$Offset) {
-    $len = [BitConverter]::ToUInt32($Bytes, $Offset)
-    $text = [Text.Encoding]::UTF8.GetString($Bytes, $Offset + 4, $len)
-    return @{ Text = $text; Next = $Offset + 4 + $len }
+$script:fail = 0
+$script:warn = 0
+
+function New-TempDir {
+    $p = Join-Path $env:TEMP ('dsh_anim_' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $p | Out-Null
+    return $p
 }
 
-function Get-FrameInfo([byte[]]$Bytes) {
-    $p = 8
-    $symbolCount = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-    $p += 4                                   # 总帧数字段，这里用不到
-    $name = Read-String $Bytes $p; $p = $name.Next
-    $atlasCount = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-    for ($a = 0; $a -lt $atlasCount; $a++) {
-        $atlas = Read-String $Bytes $p; $p = $atlas.Next
-    }
+function Get-BuildXml([string]$zipPath, [string]$tempDir) {
+    $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
+    try {
+        $entry = $archive.GetEntry('build.bin')
+        if ($null -eq $entry) { return $null }
+        $bin = Join-Path $tempDir 'build.bin'
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $bin, $true)
+    } finally { $archive.Dispose() }
 
-    $result = @()
-    for ($s = 0; $s -lt $symbolCount; $s++) {
-        $hash = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-        $frameCount = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-        for ($f = 0; $f -lt $frameCount; $f++) {
-            $frameNum = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-            $duration = [BitConverter]::ToUInt32($Bytes, $p); $p += 4
-            $x = [BitConverter]::ToSingle($Bytes, $p)
-            $y = [BitConverter]::ToSingle($Bytes, $p + 4)
-            $w = [BitConverter]::ToSingle($Bytes, $p + 8)
-            $h = [BitConverter]::ToSingle($Bytes, $p + 12)
-            $p += 16
-            $p += 8                            # alphaidx + alphacount
-            $result += [pscustomobject]@{
-                Symbol   = ('{0:x8}' -f $hash)
-                Frame    = $frameNum
-                Duration = $duration
-                Size     = ('{0}x{1}' -f [int]$w, [int]$h)
-            }
+    & $python $cli $bin 2>&1 | Out-Null
+    $xmlPath = Join-Path $tempDir 'build.xml'
+    if (-not (Test-Path $xmlPath)) { return $null }
+    return [xml](Get-Content $xmlPath -Raw)
+}
+
+function Get-AtlasSize([string]$zipPath, [string]$tempDir) {
+    $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
+    try {
+        $entry = $archive.GetEntry('atlas-0.tex')
+        if ($null -eq $entry) { return $null }
+        $tex = Join-Path $tempDir 'atlas-0.tex'
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $tex, $true)
+    } finally { $archive.Dispose() }
+
+    $png = Join-Path $tempDir 'atlas.png'
+    & $stex decompress -i $tex -o $png 2>&1 | Out-Null
+    if (-not (Test-Path $png)) { return $null }
+
+    $b = [IO.File]::ReadAllBytes($png)
+    if ($b.Length -lt 24) { return $null }
+    $wBytes = $b[16..19]; [Array]::Reverse($wBytes)
+    $hBytes = $b[20..23]; [Array]::Reverse($hBytes)
+    $w = [BitConverter]::ToUInt32($wBytes, 0)
+    $h = [BitConverter]::ToUInt32($hBytes, 0)
+    return "${w}x${h}"
+}
+
+function Get-FirstFrame($buildXml) {
+    if ($null -eq $buildXml) { return $null }
+    $symbols = @($buildXml.Build.Symbols.Symbol)
+    if ($symbols.Count -eq 0) { return $null }
+    $frames = @($symbols[0].Frame)
+    if ($frames.Count -eq 0) { return $null }
+    return $frames[0]
+}
+
+function Test-Zip([string]$zipPath, [string]$tempDir) {
+    $name = Split-Path $zipPath -Leaf
+    $entries = @()
+    $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
+    try { $entries = @($archive.Entries | ForEach-Object { $_.FullName }) } finally { $archive.Dispose() }
+
+    $problems = @()
+    if ($entries -notcontains 'build.bin') { $problems += '缺 build.bin' }
+    if ($entries -notcontains 'atlas-0.tex') { $problems += '缺 atlas-0.tex' }
+    $hasAnim = $entries -contains 'anim.bin'
+
+    $buildXml = Get-BuildXml $zipPath $tempDir
+    $binPath = Join-Path $tempDir 'build.bin'
+    $buildVersion = $null
+    if (Test-Path $binPath) {
+        $binBytes = [IO.File]::ReadAllBytes($binPath)
+        if ($binBytes.Length -ge 8) { $buildVersion = [BitConverter]::ToUInt32($binBytes, 4) }
+    }
+    if ($buildVersion -ne 6) { $problems += "build 版本=$buildVersion，期望=6" }
+    $buildName = $null
+    $symbolName = $null
+    $frame = $null
+    if ($null -ne $buildXml) {
+        $buildName = $buildXml.Build.name
+        $symbols = @($buildXml.Build.Symbols.Symbol)
+        if ($symbols.Count -gt 0) {
+            $symbolName = $symbols[0].name
+            $frames = @($symbols[0].Frame)
+            if ($frames.Count -gt 0) { $frame = $frames[0] }
         }
+    } else {
+        $problems += 'build.bin 无法解析'
     }
-    return $result
-}
 
-$mods = Get-ChildItem -Path $ModsRoot -Directory -ErrorAction SilentlyContinue
-if (-not $mods) { Write-Host "找不到 mods 目录：$ModsRoot" -ForegroundColor Red; exit 2 }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectBuild)) {
+        if ($buildName -ne $ExpectBuild) { $problems += "build 名=$buildName，期望=$ExpectBuild" }
+        if ($symbolName -ne $ExpectBuild) { $problems += "symbol 名=$symbolName，期望=$ExpectBuild" }
+    }
 
-$bad = 0
-$total = 0
-foreach ($mod in $mods) {
-    $animDir = Join-Path $mod.FullName 'anim'
-    if (-not (Test-Path $animDir)) { continue }
-    foreach ($zip in Get-ChildItem -Path $animDir -Filter '*.zip' -File) {
+    $atlasSize = Get-AtlasSize $zipPath $tempDir
+    if ($null -eq $atlasSize) { $problems += 'atlas-0.tex 无法解码' }
+
+    $dur = $null
+    if ($null -ne $frame) {
+        $dur = [int]$frame.duration
+        $isSwap = $name -match 'swap'
+        if ($dur -le 1 -and $isSwap) { $problems += 'swap build 的 duration <= 1（手持会不显示）' }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($RefZip) -and $null -ne $frame) {
+        $refTemp = New-TempDir
         try {
-            $archive = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
-        } catch { continue }
-        try {
-            $entry = $archive.GetEntry('build.bin')
-            if ($null -eq $entry) { continue }
-            $stream = $entry.Open()
-            $memory = New-Object IO.MemoryStream
-            $stream.CopyTo($memory)
-            $stream.Dispose()
-            $bytes = $memory.ToArray()
-            $memory.Dispose()
-        } finally { $archive.Dispose() }
-
-        $isSwap = (Split-Path $zip -Leaf) -match 'swap'
-        $frames = Get-FrameInfo $bytes
-        foreach ($fr in $frames) {
-            $total++
-            $flag = ''
-            if ($fr.Duration -le 1) {
-                if ($isSwap) {
-                    $bad++
-                    $flag = '  <-- 可疑（swap build 的 duration <= 1，手持会不显示）'
-                } else {
-                    $flag = '  （地面/静态 build，duration 1 通常正常）'
+            $refXml = Get-BuildXml $RefZip $refTemp
+            $refFrame = Get-FirstFrame $refXml
+            if ($null -ne $refFrame) {
+                $keys = 'x', 'y', 'w', 'h'
+                foreach ($k in $keys) {
+                    $a = [double]$frame.$k
+                    $b = [double]$refFrame.$k
+                    if ([math]::Abs($a - $b) -gt 0.01) {
+                        $problems += ("frame {0}={1}，参考={2}" -f $k, $a, $b)
+                    }
                 }
             }
-            Write-Host ('{0,-14} {1,-40} symbol {2} frame {3} duration {4} size {5}{6}' -f `
-                    $mod.Name, (Split-Path $zip -Leaf), $fr.Symbol, $fr.Frame, $fr.Duration, $fr.Size, $flag)
+        } finally { Remove-Item $refTemp -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
+    $status = 'OK'
+    if ($problems.Count -gt 0) { $status = 'FAIL'; $script:fail++ }
+    elseif ($null -eq $frame) { $status = 'WARN'; $script:warn++ }
+
+    $frameText = 'none'
+    if ($null -ne $frame) {
+        $frameText = ('x={0} y={1} w={2} h={3}' -f $frame.x, $frame.y, $frame.w, $frame.h)
+    }
+    Write-Host ('{0,-40} build={1} ver={2} symbol={3} dur={4} {5} atlas={6} anim={7} [{8}]' -f `
+            $name, $buildName, $buildVersion, $symbolName, $dur, $frameText, $atlasSize, $(if ($hasAnim) { 'yes' } else { 'no' }), $status)
+    foreach ($p in $problems) { Write-Host ("    - " + $p) -ForegroundColor Yellow }
+}
+
+$temp = New-TempDir
+try {
+    if (-not [string]::IsNullOrWhiteSpace($Zip)) {
+        Test-Zip (Resolve-Path $Zip).Path $temp
+    } else {
+        $mods = Get-ChildItem -Path $ModsRoot -Directory -ErrorAction SilentlyContinue
+        if (-not $mods) { Write-Host "找不到 mods 目录：$ModsRoot" -ForegroundColor Red; exit 2 }
+        foreach ($mod in $mods) {
+            $animDir = Join-Path $mod.FullName 'anim'
+            if (-not (Test-Path $animDir)) { continue }
+            foreach ($z in Get-ChildItem -Path $animDir -Filter '*.zip' -File) {
+                Test-Zip $z.FullName $temp
+            }
         }
     }
+} finally {
+    Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ''
-if ($bad -eq 0) {
-    Write-Host "OK：$total 个帧里没有 swap build 的 duration <= 1。" -ForegroundColor Green
+if ($script:fail -eq 0) {
+    Write-Host ("OK：没有失败项（WARN={0}）" -f $script:warn) -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "发现 $bad 个 swap build 的 duration <= 1（共 $total 帧）。回 DST Mod Tool 里把 Duration 改成 8 再导出。" -ForegroundColor Yellow
+    Write-Host ("发现 {0} 个失败项；按上面的逐条修复后重新导出。" -f $script:fail) -ForegroundColor Yellow
     exit 1
 }

@@ -1,9 +1,10 @@
 
-PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
+PrefabFiles = {"blade_of_the_ruined_king", "blade_glow_fx"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 
 Assets = {
     Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),   
     Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),   
+    Asset("ANIM", "anim/blade_glow_fx.zip"),   
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),   
 }       
 
@@ -41,38 +42,40 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
         → 客户端 player 触发 bladeglowdirty
         → ApplyGlow 读取 k，调用 SetSymbolAddColour / LightOverride
     ]]
-local function ApplyGlow(player, k)
-    if player.AnimState == nil then return end
-
-    if k <= 0 then
-        player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
-        player.AnimState:SetSymbolLightOverride("swap_object", 0)
-        player.AnimState:ClearSymbolBloom("swap_object")
-        return
-    end
-
-    -- 叠加颜色         (0.08, 0.45, 0.32)  偏暗的蓝绿色 / 深青绿色
-    player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
-    player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
-    player.AnimState:SetSymbolBloom("swap_object")
-end
-
-AddPlayerPostInit(function(player)
-
-    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
     
-    player:ListenForEvent("bladeglowdirty", function()
-        ApplyGlow(player, player._blade_glow:value())
-    end)
+-- local function ApplyGlow(player, k)
+--     if player.AnimState == nil then return end
 
-    -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
-    player:DoTaskInTime(0.5, function()
-        if player:IsValid() then
-            ApplyGlow(player, player._blade_glow:value())
-        end
-    end)
-end)
+--     if k <= 0 then
+--         player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
+--         player.AnimState:SetSymbolLightOverride("swap_object", 0)
+--         player.AnimState:ClearSymbolBloom("swap_object")
+--         return
+--     end
+
+--     -- 叠加颜色         (0.08, 0.45, 0.32)  偏暗的蓝绿色 / 深青绿色
+--         -- 对于整个Symbol
+--     player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
+--     player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
+--         -- 对于symbol中发亮的部分
+--     player.AnimState:SetSymbolBloom("swap_object")
+-- end
+
+-- AddPlayerPostInit(function(player)
+
+--     player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
     
+--     player:ListenForEvent("bladeglowdirty", function()
+--         ApplyGlow(player, player._blade_glow:value())
+--     end)
+
+--     -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
+--     player:DoTaskInTime(0.5, function()
+--         if player:IsValid() then
+--             ApplyGlow(player, player._blade_glow:value())
+--         end
+--     end)
+-- end)
 
 local mine_config = {
     BASE_DAMAGE  = 54,

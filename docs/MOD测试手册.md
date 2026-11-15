@@ -94,6 +94,12 @@
 - **标志位**：按 `IndexOf('atlas-0.tex') + 23` 定位，读 uint32，正常值应为 `8`
 - **图集元素名**：图集 xml 里的 `<Element name="xxx.tex">` 列表
 - **任意 API 是否存在、参数顺序**：查 `refs\other_reference\scripts\` 下的游戏源码
+- **一键检查动画 zip**：`tools\scripts\check_anim_duration.ps1`
+  - 全量：`powershell -File tools\scripts\check_anim_duration.ps1`
+  - 单个：`... -Zip <zip> -ExpectBuild <build名>`
+  - 对比锚点：`... -Zip <新zip> -RefZip <参考zip>`
+  - 覆盖：zip 条目、build/symbol 名、frame `x/y/w/h`、`duration`、atlas 尺寸、`anim.bin` 是否存在
+- **格式规范**：`tools\official\scripts\buildanimation.py` 头部注释（BILD v6 / ANIM v4 字段表），来源与许可见 `tools\official\README.md`
 
 ### 通道 2：日志（L1/L2）
 
@@ -389,7 +395,7 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 | `Asset Archive.exe` | 54 MB | `dont-starve-asset-archive`，资源包归档/解包 |
 | `Spriter.exe - 快捷方式.lnk` | — | 指向已安装的 Spriter Pro：`<Spriter 安装目录>\Spriter.exe` |
 
-### 11.3 `cli\` —— 可脚本化（自动化会调用）
+### 11.3 `cli\` 与 `official\` —— 可脚本化 / 可参考
 
 | 工具 | 命令 | 功能 | 我什么时候用 |
 |---|---|---|---|
@@ -400,14 +406,16 @@ L2 跑完，把关键数值 dump 成一份 JSON/Lua 表存进 `baseline\`：
 | `animbuilder\animc.exe` | `animc /anim a.xml /build b.xml /out <目录>` | xml → bin | 没有 Steam Mod Tools 时编译动画 |
 | `animbuilder\animd.exe` | `animd /in <目录> /out <目录>` | bin → xml（结果缺 image 属性） | 反编译核对 |
 | `pyscripts\cli.py` | `python cli.py <文件或目录> [参数]` | 全流程：zip→scml、build.json 处理、图片→atlas、重命名、裁剪等 | 批量处理、自动化拼装 |
+| `official\scripts\buildanimation.py` | 阅读（Python 2.7，本地不入库） | Klei 官方 scml→build/anim 实现；头部有 **BILD v6 / ANIM v4** 格式注释 | 查格式、对照实现时 |
 | `steam\steam2md.py` | `python steam2md.py` | Steam 格式 ↔ markdown | 写创意工坊说明 |
 | `fsb-extractor\FMOD FSB Extractor.exe` | 命令行 | `.fsb` → `.wav` | 处理音效 |
 
-**三条必须记住的限制**：
+**四条必须记住的限制**：
 
 1. **打包带透明通道的贴图只能用 `stex`。** 工具集原作者原话：*"stex 是唯一一个正确处理透明图片的程序，因此建议不要使用 ktech 或者 ztools"*。
 2. **`krane` / `ktech` 是 32 位程序**，处理超大图集时受 2 GB 地址空间限制。
 3. **`pyscripts` 靠相对路径找工具**：`ktech.py` 搜 `../../ktools`，`stex.py` 搜 `../../stex`。所以 `pyscripts`、`ktools`、`stex` **必须留在 `cli\` 下的同级位置**，移动任何一个都要同步检查这两个搜索路径。
+4. **`cli.py` 编译单帧 scml 时会忽略 `<object x/y/scale>`**，frame 仍按图片原点/居中生成。手持武器、跟随 FX 这类需要自定义锚点的 build，请用 **DST Mod Tool** 把图放到十字中心导出；不要手动改 `build.xml` 的 `Frame` 去凑位置（pivot/uv/顶点不会同步）。
 
 > `BuildRenamer` 会删掉 `build.bin` 尾部的符号表，导致字节布局变化——这正是「标志位不能写死偏移 65，必须按 `atlas-0.tex` 起点 +23 定位」的原因（见零节）。
 

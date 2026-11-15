@@ -15,6 +15,8 @@ refs/
 tools/app/
 tools/cli/
 tools/gui/
+# Klei 官方 Mod Tools 源码子集，仅本地参考，不入库。
+tools/official/
 
 # ---- 临时目录与中间产物 ----
 _trash/
