@@ -128,6 +128,7 @@ function Test-Zip([string]$zipPath, [string]$tempDir) {
     $buildName = $null
     $symbolName = $null
     $frame = $null
+    $symbols = @()
     if ($null -ne $buildXml) {
         $buildName = $buildXml.Build.name
         $symbols = @($buildXml.Build.Symbols.Symbol)
@@ -142,31 +143,42 @@ function Test-Zip([string]$zipPath, [string]$tempDir) {
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectBuild)) {
         if ($buildName -ne $ExpectBuild) { $problems += "build 名=$buildName，期望=$ExpectBuild" }
-        if ($symbolName -ne $ExpectBuild) { $problems += "symbol 名=$symbolName，期望=$ExpectBuild" }
+        if ($symbols.Count -eq 1 -and $symbolName -ne $ExpectBuild) {
+            $problems += "symbol 名=$symbolName，期望=$ExpectBuild"
+        }
     }
 
     $atlasSize = Get-AtlasSize $zipPath $tempDir
     if ($null -eq $atlasSize) { $problems += 'atlas-0.tex 无法解码' }
 
     $dur = $null
-    if ($null -ne $frame) {
-        $dur = [int]$frame.duration
-        $isSwap = $name -match 'swap'
-        if ($dur -le 1 -and $isSwap) { $problems += 'swap build 的 duration <= 1（手持会不显示）' }
+    $isSwap = $name -match 'swap'
+    foreach ($sym in $symbols) {
+        foreach ($fr in @($sym.Frame)) {
+            $d = [int]$fr.duration
+            if ($null -eq $dur -or $d -lt $dur) { $dur = $d }
+            if ($d -le 1 -and $isSwap) {
+                $problems += ("swap build 的 duration <= 1（symbol={0}）" -f $sym.name)
+            }
+        }
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($RefZip) -and $null -ne $frame) {
+    if (-not [string]::IsNullOrWhiteSpace($RefZip) -and $symbols.Count -gt 0) {
         $refTemp = New-TempDir
         try {
             $refXml = Get-BuildXml $RefZip $refTemp
             $refFrame = Get-FirstFrame $refXml
             if ($null -ne $refFrame) {
                 $keys = 'x', 'y', 'w', 'h'
-                foreach ($k in $keys) {
-                    $a = [double]$frame.$k
-                    $b = [double]$refFrame.$k
-                    if ([math]::Abs($a - $b) -gt 0.01) {
-                        $problems += ("frame {0}={1}，参考={2}" -f $k, $a, $b)
+                foreach ($sym in $symbols) {
+                    $fr = @($sym.Frame)[0]
+                    if ($null -eq $fr) { continue }
+                    foreach ($k in $keys) {
+                        $a = [double]$fr.$k
+                        $b = [double]$refFrame.$k
+                        if ([math]::Abs($a - $b) -gt 0.01) {
+                            $problems += ("symbol {0} frame {1}={2}，参考={3}" -f $sym.name, $k, $a, $b)
+                        }
                     }
                 }
             }
@@ -181,8 +193,12 @@ function Test-Zip([string]$zipPath, [string]$tempDir) {
     if ($null -ne $frame) {
         $frameText = ('x={0} y={1} w={2} h={3}' -f $frame.x, $frame.y, $frame.w, $frame.h)
     }
-    Write-Host ('{0,-40} build={1} ver={2} symbol={3} dur={4} {5} atlas={6} anim={7} [{8}]' -f `
-            $name, $buildName, $buildVersion, $symbolName, $dur, $frameText, $atlasSize, $(if ($hasAnim) { 'yes' } else { 'no' }), $status)
+    $symbolLabel = $symbolName
+    if ($symbols.Count -gt 1) {
+        $symbolLabel = ('{0} symbols: {1}' -f $symbols.Count, (($symbols | ForEach-Object { $_.name }) -join ','))
+    }
+    Write-Host ('{0,-40} build={1} ver={2} {3} dur={4} {5} atlas={6} anim={7} [{8}]' -f `
+            $name, $buildName, $buildVersion, $symbolLabel, $dur, $frameText, $atlasSize, $(if ($hasAnim) { 'yes' } else { 'no' }), $status)
     foreach ($p in $problems) { Write-Host ("    - " + $p) -ForegroundColor Yellow }
 }
 

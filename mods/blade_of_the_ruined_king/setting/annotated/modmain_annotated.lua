@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 modmain.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.6
+版本：v1.0.7
 ================================================================================
 ]==]
 
@@ -141,11 +141,11 @@
     modmain 里的全局 Assets       整个 mod                mod 启动时一次性预载             UI 图集、要随时用的公共资源
         modmain 的 Assets 会被挂到一个自动生成的 MOD_<mod名> prefab 上，启动时 LoadPrefabs 预载
     ]]
-PrefabFiles = {"blade_of_the_ruined_king", "blade_glow_fx"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
+PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 Assets = {
     Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),   
     Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),   
-    Asset("ANIM", "anim/blade_glow_fx.zip"),   
+    Asset("ANIM", "anim/swap_blade_glow.zip"),   
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),   
 }       
 
@@ -236,6 +236,12 @@ local mine_config = {
     RUIN_SLOW_TIME = 3,                   -- 简述时间
     RUIN_SLOW_MULT = 0.7,                 -- 0.7 ——> 减速 30%
 
+    GLOW_ITER = {
+        low = 0.36,
+        mid_left = 0.42,
+        mid_right = 0.58,
+        high = 0.65,
+    }
 }
 GLOBAL.TUNING.BLADE_OF_THE_RUINED_KING = mine_config
 
@@ -362,3 +368,78 @@ scripts/components/  (835)
     ├─ pollinator      授粉
     └─ …
 ]]
+local function ApplyGlow(player, k)
+    if player.AnimState == nil then return end
+    -- if k <= 0 then
+    --     player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
+    --     player.AnimState:SetSymbolLightOverride("swap_object", 0)
+    --     player.AnimState:ClearSymbolBloom("swap_object")
+    --     return
+    -- end
+
+    -- -- 叠加颜色         (0.08, 0.45, 0.32)  偏暗的蓝绿色 / 深青绿色
+    --     -- 对于整个Symbol
+    -- player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
+    -- player.AnimState:SetSymbolLightOverride("swap_object", 0.1 + 0.25 * math.min(k, 1))
+    --     -- 对于symbol中发亮的部分
+    --         --SetBloomEffectHandle 是实体级，脸/衣服会一起亮
+    --         --SetSymbolBloom 单独无效  ————> 这里是有问题的
+    -- player.AnimState:SetSymbolBloom("swap_object")
+    --[[
+        1.给“从低到高”和“从高到低”设不同门槛：
+            切换	门槛
+            low → mid	k >= 0.42
+            mid → low	k < 0.36
+            mid → high	k >= 0.65
+            high → mid	k < 0.58
+
+        2.low               mid              high
+        |---0.36---|--0.42--|--0.58--|--0.65--|
+            ↑ 只有低于 0.36 才回 low
+                        ↑ 只有高于 0.42 才进 mid
+        k在 0-0.36 之间：
+            变为low
+        在 0.36–0.42 之间：
+            当前是 low → 保持 low
+            当前是 mid → 保持 mid
+        在 0。42-0.58 之间：
+            变为mid
+        在 0.36–0.42 之间：
+            当前是 mid → 保持 mid
+            当前是 high → 保持 high
+        在 0.65-  之间：
+            变为high
+        ]]
+    if k <= 0 then
+        player._weapon_tier = nil
+        return
+    end
+    local tier = player._weapon_tier or "glow_low"
+    local tier_standard = GLOBAL.TUNING.BLADE_OF_THE_RUINED_KING.GLOW_ITER
+    if tier == "glow_high" then
+        if k < tier_standard.mid_right then tier = "glow_mid" end
+    elseif tier == "glow_mid" then
+        if k >= tier_standard.high then
+            tier = "glow_high"
+        elseif k < tier_standard.low then
+            tier = "glow_low"
+        end
+    else -- low
+        if k >= tier_standard.mid_left then tier = "glow_mid" end
+    end
+    if player._weapon_tier ~= tier then
+        player._weapon_tier = tier
+        player.AnimState:OverrideSymbol("swap_object", "swap_blade_glow", tier)
+    end
+end
+AddPlayerPostInit(function(player)
+    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
+    player:ListenForEvent("bladeglowdirty", function()
+        ApplyGlow(player, player._blade_glow:value())
+    end)
+    player:DoTaskInTime(0.5, function()
+        if player:IsValid() then
+            ApplyGlow(player, player._blade_glow:value())
+        end
+    end)
+end)

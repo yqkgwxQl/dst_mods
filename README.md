@@ -37,7 +37,7 @@ A work-in-progress collection of Don't Starve Together mods.
 
 > 永失吾爱，举目破败
 
-**状态**：P0 数值、P1 机制、P2 战斗特效已完成并通过验证；贴图已换成三护手分件版本（武器 + 黑雾，v1.0.4）；夜晚发光已完成（v1.0.5）；v1.0.6 加入独立光晕 FX（`blade_glow_fx`，**FollowSymbol 只跟随位置、旋转问题待解决**）。剩余 P3 项：常驻剑雾、低耐久裂纹、配置项。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
+**状态**：P0 数值、P1 机制、P2 战斗特效已完成并通过验证；贴图已换成三护手分件版本（武器 + 黑雾，v1.0.4）；夜晚发光已完成（v1.0.5）；v1.0.7 改为三档光晕 build（`swap_blade_glow`，按理智/命中切换 low/mid/high）。剩余 P3 项：常驻剑雾、低耐久裂纹、配置项。详细设计与数值见 [mechanic_design.md](mods/blade_of_the_ruined_king/setting/mechanic_design.md)。
 
 ---
 
@@ -71,6 +71,7 @@ A work-in-progress collection of Don't Starve Together mods.
 ```
 
 - **测试手册**：[docs/MOD测试手册.md](docs/MOD测试手册.md) —— 分层的测试方法与故障排查
+- **API 行为记录与特效方案**：[docs/API行为记录.md](docs/API行为记录.md) —— 方案矩阵、决策树、探针流程与实测 API 行为
 - **工作区约定**：[docs/工作区约定.md](docs/工作区约定.md) —— 目录职责、临时文件规则、清理脚本
 - **文档同步清单**：[docs/文档同步清单.md](docs/文档同步清单.md) —— 提交前核对所有文档与代码是否一致
 - **重建参考资料**：`refs/` 未入库，clone 后执行

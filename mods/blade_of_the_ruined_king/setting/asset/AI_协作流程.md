@@ -89,17 +89,20 @@
 
 ```text
 assets/
-├─ current/commit/        当前进游戏的成品
-├─ old_version/vN/source/ 每轮 AI 原图
-├─ old_version/vN/final/  处理后的成品
-└─ README.md              版本说明
+├─ current/commit/          当前进游戏的成品
+├─ old_version/vN/source/   每轮 AI 原图（只放输入）
+├─ old_version/vN/final/    处理后的成品
+├─ old_version/vN/final/preview/  预览图
+└─ README.md                版本说明
 ```
+
+规则：**每个新版本目录必须包含 `source/`、`final/`、`final/preview/`**，版本根目录只放 `README.md`；预览文件命名 `preview_*.png`，与被预览的成品对应。
 
 命名：
 
 - 源图：`ai1.png`、`ai1_1.png`（分件）
 - 成品：`ruined_blade_weapon_320.png`
-- 预览：`preview_weapon.png`
+- 预览：`final/preview/preview_weapon.png`
 
 记录：每轮至少保留 **提示词、模型、seed、参考图**，方便复现。
 

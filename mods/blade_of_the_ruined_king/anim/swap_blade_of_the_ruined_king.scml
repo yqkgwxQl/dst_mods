@@ -3,6 +3,15 @@
     <folder id="0" name="swap_blade_of_the_ruined_king">
         <file id="0" name="swap_blade_of_the_ruined_king/swap_ruined_blade.png" width="81" height="324" pivot_x="0" pivot_y="1"/>
     </folder>
+    <!-- 请问swap_blade_of_the_ruined_king不是不需要animation吗? 为什么这里还有下面的entity(animation内容)
+     因为 scml 是 Spriter 的数据格式，它没有“静态图片”这个概念，所有内容都必须挂在 entity → animation → timeline → object 下面。
+        scml 里的 <animation> 是格式要求，不是“游戏会播放的动画”
+        最终 zip 里有没有 anim.bin，取决于导出时是否包含动画数据
+        对 swap 包：scml 有 animation，zip 没有 anim.bin，两者不矛盾
+        <entity name="swap_blade_of_the_ruined_king">     <- build 名
+            <animation name="build" ...>                    <- 承载关键帧的容器
+                <timeline name="swap_ruined_blade">           <- 符号名
+                <object ... x="-32" y="197" scale="0.7901"/> <- 图片的位置/缩放 -->
     <entity id="0" name="swap_blade_of_the_ruined_king">
         <animation id="0" name="build" length="1000" interval="100">
             <mainline>
@@ -12,6 +21,7 @@
             </mainline>
             <timeline id="0" name="swap_ruined_blade">
                 <key id="0" spin="0">
+                <!-- 这里和第4行的<file id="0" name="swap_blade_of_the_ruined_king/swap_ruined_blade.png" width="81" height="324" pivot_x="0" pivot_y="1"/>对应 -->
                     <object folder="0" file="0" x="-32.00" y="197" scale="0.7901"/>
                 </key>
             </timeline>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spriter_data scml_version="1.0" generator="BrashMonkey Spriter" generator_version="r11">
+    <folder id="0" name="glow_low">    
+                <!-- pivot_x=0, pivot_y=1 表示锚点在图像左下角。 -->
+        <file id="0" name="swap_blade_glow/glow_low.png" width="80" height="320" pivot_x="0" pivot_y="1"/>
+    </folder>
+    <folder id="1" name="glow_mid">    
+        <file id="0" name="swap_blade_glow/glow_mid.png" width="80" height="320" pivot_x="0" pivot_y="1"/>
+    </folder>
+    <folder id="2" name="glow_high">    
+        <file id="0" name="swap_blade_glow/glow_high.png" width="80" height="320" pivot_x="0" pivot_y="1"/>
+    </folder>
+    <!--    
+        SCML	            DST build
+        folder name	        symbol 名  ————> 想要不通过的symbol,就要有不同的folder
+        file	            这个 symbol 的某一张图
+        mainline key（第几帧）
+            └─ object_ref（这一帧用哪个对象）
+            ├─ folder/file   → 用哪张图
+            └─ timeline/key  → timeline：时间轴 key：用时间轴的哪个变换
+             -->
+    <entity id="0" name="swap_blade_glow">
+        <animation id="0" name="build" length="1000" interval="100">
+            <mainline>
+                <key id="0">
+                <!-- object_ref代表哪个对象，后面的id="0" name="glow_low"  timeline="0" key="0" folder="0" file="0" z_index="0"代表对应的属性 -->
+                                                                                        <!-- z_index 是绘制顺序 -->
+                    <object_ref id="0" name="glow_low"  timeline="0" key="0" folder="0" file="0" z_index="0"/>
+                    <object_ref id="1" name="glow_mid"  timeline="1" key="0" folder="1" file="0" z_index="1"/>
+                    <object_ref id="2" name="glow_high" timeline="2" key="0" folder="2" file="0" z_index="2"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="glow_low">
+                <key id="0">
+                    <object folder="0" file="0" x="-1.2" y="-94.35" scale="0.8008"/>
+                </key>
+            </timeline>
+            <timeline id="1" name="glow_mid">
+                <key id="0">
+                    <object folder="1" file="0" x="-1.2" y="-94.35" scale="0.8008"/>
+                </key>
+            </timeline>
+            <timeline id="2" name="glow_high">
+                <key id="0">
+                    <object folder="2" file="0" x="-1.2" y="-94.35" scale="0.8008"/>
+                </key>
+            </timeline>
+        </animation>
+    </entity>
+</spriter_data>

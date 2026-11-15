@@ -1,10 +1,11 @@
 
-PrefabFiles = {"blade_of_the_ruined_king", "blade_glow_fx"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
+PrefabFiles = {"blade_of_the_ruined_king"}     -- 对应 scripts/prefabs/blade_of_the_ruined_king.lua
 
 Assets = {
     Asset("ANIM", "anim/blade_of_the_ruined_king.zip"),   
     Asset("ANIM", "anim/swap_blade_of_the_ruined_king.zip"),   
-    Asset("ANIM", "anim/blade_glow_fx.zip"),   
+    -- Asset("ANIM", "anim/blade_glow_fx.zip"),   
+    Asset("ANIM", "anim/swap_blade_glow.zip"),   
     Asset("ATLAS", "images/inventoryimages/inventoryimg_full_64.xml"),   
 }       
 
@@ -16,6 +17,51 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
     GLOBAL.TECH.SCIENCE_TWO, { atlas = "images/inventoryimages/inventoryimg_full_64.xml",
       image = "inventoryimg_full_64.tex" },{ "WEAPONS" })
       --image 要的是图集里的元素名（看 xml 里的 <Element name="...">），不是文件路径
+
+
+
+local mine_config = {
+    BASE_DAMAGE  = 54,
+    USES = 100,    
+    SANITY_DRAIN = -50/480, --每秒
+    -- 生命偷取	命中 +1，击杀再 +3
+    LIFESTEAL_HIT = 1,      
+    LIFESTEAL_KILL = 3,    
+    --雾之锋(真伤) : 目标当前生命 3%，单次上限 20点伤害，要求目标生命值>100
+    BLADE_OF_MIST_PERCENT = 0.03,
+    BLADE_OF_MIST_LIMIT = 20,
+    BLADE_OF_MIST_MIN_HEALTH = 100,
+    -- 抓挠之影	: 同一目标 3 层 → 减速 30%，持续 3 秒
+    -- Crawling Horror 抓挠之影
+    RUIN_SLOW_KEY =  "ruined_blade_slow", -- 速度倍率的key,唯一即可
+    RUIN_SLOW_STACK_WINDOW = 4,           -- 4s内没有命中直接清零
+    RUIN_SLOW_TIME = 3,                   -- 简述时间
+    RUIN_SLOW_MULT = 0.7,                 -- 0.7 ——> 减速 30%
+    GLOW_ITER = {
+        low = 0.36,
+        mid_left = 0.42,
+        mid_right = 0.58,
+        high = 0.65,
+    }
+}
+GLOBAL.TUNING.BLADE_OF_THE_RUINED_KING = mine_config
+
+--物品名：背包/箱子里的悬停名、制作栏里的产物名、物品获得提示
+-- 查找顺序：
+    --  游戏拿 prefab 名大写去查，查不到就显示原始 prefab 名或报缺名。
+GLOBAL.STRINGS.NAMES.BLADE_OF_THE_RUINED_KING = "破败王者之刃"
+--配方描述：制作栏里点开配方后，名字下面那两行小字
+-- 查找顺序：
+    -- STRINGS.RECIPE_DESC[string.upper(self.recipe.description or self.recipe.product)]
+GLOBAL.STRINGS.RECIPE_DESC.BLADE_OF_THE_RUINED_KING = "永失吾爱，举目破败"
+--检视台词：角色打量这件物品时说的话（默认角色通用）
+-- 查找顺序：
+    -- 先查当前角色的 STRINGS.CHARACTERS.WILSON.DESCRIBE.xxx；
+    -- 找不到再回退到 STRINGS.CHARACTERS.GENERIC.DESCRIBE.xxx（就是你写的这行） ———————> 全局的，并非角色专属
+    -- 还没有就用万能句 STRINGS.CHARACTERS.GENERIC.DESCRIBE_GENERIC            ———————> 全局的，并非角色专属
+GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BLADE_OF_THE_RUINED_KING = "她唇角的一弯，笑意中的温柔... 于她双眸中，我倾见爱如永恒"
+
+
 
 --[[
     1.------------------
@@ -43,75 +89,47 @@ AddRecipe2("blade_of_the_ruined_king", { Ingredient("nightmarefuel", 2), Ingredi
         → ApplyGlow 读取 k，调用 SetSymbolAddColour / LightOverride
     ]]
     
--- local function ApplyGlow(player, k)
---     if player.AnimState == nil then return end
+local function ApplyGlow(player, k)
+    if player.AnimState == nil then return end
 
---     if k <= 0 then
---         player.AnimState:SetSymbolAddColour("swap_object", 0, 0, 0, 0)
---         player.AnimState:SetSymbolLightOverride("swap_object", 0)
---         player.AnimState:ClearSymbolBloom("swap_object")
---         return
---     end
+    if k <= 0 then
+        player._weapon_tier = nil
+        return
+    end
 
---     -- 叠加颜色         (0.08, 0.45, 0.32)  偏暗的蓝绿色 / 深青绿色
---         -- 对于整个Symbol
---     player.AnimState:SetSymbolAddColour("swap_object", 0.10 * k, 0.55 * k, 0.38 * k, 0)
---     player.AnimState:SetSymbolLightOverride("swap_object", 0.2 + 0.4 * math.min(k, 1))
---         -- 对于symbol中发亮的部分
---     player.AnimState:SetSymbolBloom("swap_object")
--- end
+    local tier = player._weapon_tier or "glow_low"
+    local tier_standard = GLOBAL.TUNING.BLADE_OF_THE_RUINED_KING.GLOW_ITER
+    if tier == "glow_high" then
+        if k < tier_standard.mid_right then tier = "glow_mid" end
 
--- AddPlayerPostInit(function(player)
+    elseif tier == "glow_mid" then
+        if k >= tier_standard.high then
+            tier = "glow_high"
+        elseif k < tier_standard.low then
+            tier = "glow_low"
+        end
+    else -- low
+        if k >= tier_standard.mid_left then tier = "glow_mid" end
+    end
 
---     player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
+    if player._weapon_tier ~= tier then
+        player._weapon_tier = tier
+        player.AnimState:OverrideSymbol("swap_object", "swap_blade_glow", tier)
+    end
+end
+
+AddPlayerPostInit(function(player)
+
+    player._blade_glow = GLOBAL.net_float(player.GUID, "blade_glow", "bladeglowdirty")
     
---     player:ListenForEvent("bladeglowdirty", function()
---         ApplyGlow(player, player._blade_glow:value())
---     end)
+    player:ListenForEvent("bladeglowdirty", function()
+        ApplyGlow(player, player._blade_glow:value())
+    end)
 
---     -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
---     player:DoTaskInTime(0.5, function()
---         if player:IsValid() then
---             ApplyGlow(player, player._blade_glow:value())
---         end
---     end)
--- end)
-
-local mine_config = {
-    BASE_DAMAGE  = 54,
-    USES = 100,    
-    SANITY_DRAIN = -50/480, --每秒
-    -- 生命偷取	命中 +1，击杀再 +3
-    LIFESTEAL_HIT = 1,      
-    LIFESTEAL_KILL = 3,    
-    --雾之锋(真伤) : 目标当前生命 3%，单次上限 20点伤害，要求目标生命值>100
-    BLADE_OF_MIST_PERCENT = 0.03,
-    BLADE_OF_MIST_LIMIT = 20,
-    BLADE_OF_MIST_MIN_HEALTH = 100,
-    -- 抓挠之影	: 同一目标 3 层 → 减速 30%，持续 3 秒
-    -- Crawling Horror 抓挠之影
-    RUIN_SLOW_KEY =  "ruined_blade_slow", -- 速度倍率的key,唯一即可
-    RUIN_SLOW_STACK_WINDOW = 4,           -- 4s内没有命中直接清零
-    RUIN_SLOW_TIME = 3,                   -- 简述时间
-    RUIN_SLOW_MULT = 0.7,                 -- 0.7 ——> 减速 30%
-
-}
-GLOBAL.TUNING.BLADE_OF_THE_RUINED_KING = mine_config
-
---物品名：背包/箱子里的悬停名、制作栏里的产物名、物品获得提示
--- 查找顺序：
-    --  游戏拿 prefab 名大写去查，查不到就显示原始 prefab 名或报缺名。
-GLOBAL.STRINGS.NAMES.BLADE_OF_THE_RUINED_KING = "破败王者之刃"
---配方描述：制作栏里点开配方后，名字下面那两行小字
--- 查找顺序：
-    -- STRINGS.RECIPE_DESC[string.upper(self.recipe.description or self.recipe.product)]
-GLOBAL.STRINGS.RECIPE_DESC.BLADE_OF_THE_RUINED_KING = "永失吾爱，举目破败"
---检视台词：角色打量这件物品时说的话（默认角色通用）
--- 查找顺序：
-    -- 先查当前角色的 STRINGS.CHARACTERS.WILSON.DESCRIBE.xxx；
-    -- 找不到再回退到 STRINGS.CHARACTERS.GENERIC.DESCRIBE.xxx（就是你写的这行） ———————> 全局的，并非角色专属
-    -- 还没有就用万能句 STRINGS.CHARACTERS.GENERIC.DESCRIBE_GENERIC            ———————> 全局的，并非角色专属
-GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BLADE_OF_THE_RUINED_KING = "她唇角的一弯，笑意中的温柔... 于她双眸中，我倾见爱如永恒"
-
-
-
+    -- net_float 只在值变化时触发事件。玩家拿剑站着不动、k 不变时，新加入的客户端收不到事件。 therefore添加
+    player:DoTaskInTime(0.5, function()
+        if player:IsValid() then
+            ApplyGlow(player, player._blade_glow:value())
+        end
+    end)
+end)

@@ -5,7 +5,7 @@
 用途：完整保留注释与代码，供翻阅、检索、讲解。
 注意：本文件不参与游戏加载；实际代码以 blade_of_the_ruined_king.lua 为准，请勿在此修改。
 同步：改完精简版后，运行 tools\scripts\sync_annotated.ps1 重新生成本文件。
-版本：v1.0.6
+版本：v1.0.7
 ================================================================================
 ]==]
 
@@ -31,38 +31,40 @@ local function UpdateGlow(inst)
         k = k * (0.75 + 0.25 * math.sin(GetTime() * 12))
         if math.random() < 0.06 then k = k + 0.15 end
     end
+    
     k = math.min(k, 0.85)
-    -- if owner._blade_glow ~= nil then
-    --     owner._blade_glow:set(k)
-    -- end
-    if inst._glow_fx and inst._glow_fx._glow_alpha then
-        inst._glow_fx._glow_alpha:set(0.25 + 0.5 * k)
+    -- k = 0.1 + 0.25 * math.min(k, 1)
+    
+    if owner._blade_glow ~= nil then
+        owner._blade_glow:set(k)
     end
+    -- if inst._glow_fx and inst._glow_fx._glow_alpha then
+    --     inst._glow_fx._glow_alpha:set(0.25 + 0.5 * k)
+    -- end
 end
 
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
     if skin_build ~= nil then
         owner:PushEvent("equipskinneditem", inst:GetSkinName())
-        owner.AnimState:OverrideItemSkinSymbol("swap_object", skin_build, "swap_blade_of_the_ruined_king", inst.GUID, "swap_blade_of_the_ruined_king")
     else
         -- 第 3 个参数是「符号名」，取的是编译产物 build.bin 里记录的符号，
         -- 不是 PNG 的文件名。你这个导出流程用 SCML 的 folder/entity 名当符号名，
         -- 你想写的符号名 = SCML 的 folder/entity 名，PNG 文件名随意（它只影响图片本身）
         -- 符号名 = build.bin 里记录的符号名（= SCML 的 folder/entity 名），不是 PNG 文件名
-        owner.AnimState:OverrideSymbol("swap_object", "swap_blade_of_the_ruined_king", "swap_blade_of_the_ruined_king")
         --[[     DST Tool的************duration****************
         地面物品是静态绘制，只画第 0 帧，duration 不参与，所以地面一直正常；
         手持是 OverrideSymbol 到角色的 swap_object，引擎按时间取样播放这个符号。duration = 1 时这一帧几乎瞬间过期，引擎取不到可画的帧 → 什么都不画；
             ]]
     end
     -- 光效(服务端，服务端无法渲染，但是客户端会进行同步渲染)
-    
-    inst._glow_fx = SpawnPrefab("blade_glow_fx")
-    if inst._glow_fx ~= nil then
-        inst._glow_fx.entity:SetParent(owner.entity)
-        inst._glow_fx.Follower:FollowSymbol(owner.GUID, "swap_object", 0, 0, 0)
-    end
+
+    -- inst._glow_fx = SpawnPrefab("blade_glow_fx")
+    -- if inst._glow_fx ~= nil then
+    --         -- 需要设置父节点
+    --     inst._glow_fx.entity:SetParent(owner.entity)
+    --     inst._glow_fx.Follower:FollowSymbol(owner.GUID, "swap_object", 0, 0, 0)
+    -- end
     inst._glow_owner = owner;
     UpdateGlow(inst)          -- 立刻刷一次
     inst._glow_task = owner:DoPeriodicTask(0.1, function()
@@ -137,17 +139,17 @@ local function onunequip(inst, owner)
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
-    if inst._glow_fx ~= nil then
-        inst._glow_fx:Remove()
-        inst._glow_fx = nil
-    end
+
+    -- if inst._glow_fx ~= nil then
+    --     inst._glow_fx:Remove()
+    --     inst._glow_fx = nil
+    -- end
+
     if owner ~= nil and owner:IsValid() then
-        -- if owner._blade_glow ~= nil then
-        --     owner._blade_glow:set(0)
-        --     owner.AnimState:ClearSymbolBloom("swap_object") 
-        -- end
-        inst._glow_owner = nil
-        inst._flash = 0
+        if owner._blade_glow ~= nil then
+            owner._blade_glow:set(0)
+            -- owner.AnimState:ClearSymbolBloom("swap_object") 
+        end
         
         owner.AnimState:Hide("ARM_carry")
         owner.AnimState:Show("ARM_normal")  
@@ -156,6 +158,8 @@ local function onunequip(inst, owner)
             owner:PushEvent("unequipskinneditem", inst:GetSkinName())
         end
     end
+    inst._glow_owner = nil
+    inst._flash = 0
 end
 local function spawn_fx(fx_name, x, y, z, angle, scale)
     local fx = SpawnPrefab(fx_name)
@@ -360,6 +364,7 @@ local function onfinished(inst)
             fuel.Transform:SetPosition(pos.x + ox, pos.y, pos.z + oz)
         end
     end
+    -- 想加音效/黑雾特效
     local tx, ty, tz  = inst.Transform:GetWorldPosition()
     spawn_fx("shadow_puff_large_back", tx, ty, tz, nil, nil)
     spawn_fx("shadow_puff_large_front", tx, ty, tz, nil, nil)
@@ -367,21 +372,16 @@ local function onfinished(inst)
         inst._glow_task:Cancel()
         inst._glow_task = nil
     end
-    -- 想加音效/黑雾特效
-    -- if inst._glow_task ~= nil then
-    --     inst._glow_task:Cancel()
-    --     inst._glow_task = nil
-    -- end
-    -- local owner = inst._glow_owner
-    -- if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
-    --     owner._blade_glow:set(0)
-    --     owner.AnimState:ClearSymbolBloom("swap_object") 
-    -- end
-
-    if inst._glow_fx ~= nil then
-        inst._glow_fx:Remove()
-        inst._glow_fx = nil
+    local owner = inst._glow_owner
+    if owner ~= nil and owner:IsValid() and owner._blade_glow ~= nil then
+        owner._blade_glow:set(0)
+        -- owner.AnimState:ClearSymbolBloom("swap_object") 
     end
+
+    -- if inst._glow_fx ~= nil then
+    --     inst._glow_fx:Remove()
+    --     inst._glow_fx = nil
+    -- end
 
     inst:Remove()
 end
@@ -483,7 +483,8 @@ local function fn()
     inst._glow_task = nil
     inst._flash = 0   -- flash 是攻击里设置的光效参数，是 onattack 里设的瞬时值：命中：0.35 击杀：0.8
     -- glow-version2
-    inst._glow_fx = nil
+    -- inst._glow_fx = nil
+
     inst:AddComponent("weapon")
     -- inst.components.weapon:SetDamage(TUNING.BLADE_OF_THE_RUINED_KING.DAMAGE)
     inst.components.weapon:SetDamage(get_damage)
