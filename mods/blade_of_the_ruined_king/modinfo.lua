@@ -32,4 +32,5 @@ client_only_mod = false
     1.0.5 增添武器光效（netvar 同步，2026-11-15）
     1.0.6 独立光晕 FX（blade_glow_fx；FollowSymbol 仅位置跟随，旋转待解决，2026-11-15）
     1.0.7 三档光晕 build（swap_blade_glow，1 build 3 symbols，2026-11-16）
+    
 ]]
